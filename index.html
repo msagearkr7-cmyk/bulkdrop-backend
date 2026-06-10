@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BulkDrop</title>
+<title>BulkDrop - Reels Downloader</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -150,9 +150,9 @@
   }
 
   .user-item .avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
     background: #1a1a1a;
     object-fit: cover;
     flex-shrink: 0;
@@ -234,11 +234,11 @@
   </div>
 
   <div class="controls-row">
-    <label title="How many accounts to fetch per request (max 200)">How many:</label>
+    <label title="How many reels to fetch per request (max 200)">How many:</label>
     <input type="number" id="amount" value="12" min="1" max="200" />
   </div>
 
-  <div class="status" id="fetchStatus">enter an instagram username to export following list</div>
+  <div class="status" id="fetchStatus">enter an instagram username to fetch reels</div>
 
   <div class="progress-bar" id="progressBar">
     <div class="progress-fill" id="progressFill"></div>
@@ -249,7 +249,7 @@
   <div class="action-row" id="actionRow" style="display:none">
     <button class="btn-outline" onclick="exportCSV()">EXPORT CSV</button>
     <button class="btn-outline" id="loadMoreBtn" onclick="loadMore()">LOAD MORE</button>
-    <button onclick="copyUsernames()">COPY USERNAMES</button>
+    <button onclick="copyUrls()">COPY URLS</button>
   </div>
 
   <div style="margin-top:10px;text-align:right">
@@ -302,7 +302,7 @@
     btn.disabled = true;
     if (lmBtn) lmBtn.disabled = true;
 
-    setStatus(`Fetching @${username}...`, 'active');
+    setStatus(`Fetching Reels for @${username}...`, 'active');
 
     try {
       const res = await fetch(`${BACKEND}/reels`, {
@@ -320,18 +320,18 @@
         return;
       }
 
-      const users = data.reels || [];
+      const reels = data.reels || [];
       lastToken = data.pagination_token || '';
-      allUsers = allUsers.concat(users);
+      allUsers = allUsers.concat(reels);
 
       if (allUsers.length === 0) {
-        setStatus(`No following data found for @${username}`, 'error');
+        setStatus(`No Reels data found for @${username}`, 'error');
         btn.disabled = false;
         return;
       }
 
-      setStatus(`Showing ${allUsers.length} accounts${data.has_more ? ' — more available' : ''}`, 'success');
-      renderUsers(users, isPaginating);
+      setStatus(`Showing ${allUsers.length} reels${data.has_more ? ' — more available' : ''}`, 'success');
+      renderUsers(reels, isPaginating);
 
       document.getElementById('actionRow').style.display = 'flex';
       if (lmBtn) {
@@ -346,30 +346,70 @@
     btn.disabled = false;
   }
 
-  function renderUsers(users, append = false) {
+  function renderUsers(reels, append = false) {
     const list = document.getElementById('userList');
     if (!append) list.innerHTML = '';
 
-    users.forEach(u => {
+    reels.forEach(r => {
       const item = document.createElement('div');
       item.className = 'user-item';
 
-      const badges = [];
-      if (u.is_verified) badges.push('<span class="badge verified">✓ VERIFIED</span>');
-      if (u.is_private)  badges.push('<span class="badge private">PRIVATE</span>');
-
+      const thumb = r.thumbnail || '';
+      
       item.innerHTML = `
-        ${u.profile_pic
-          ? `<img class="avatar" src="${u.profile_pic}" onerror="this.style.display='none'" />`
+        ${thumb
+          ? `<img class="avatar" src="${thumb}" onerror="this.style.display='none'" />`
           : `<div class="avatar"></div>`}
         <div class="info">
-          <div class="uname">@${u.username || '—'}</div>
-          ${u.full_name ? `<div class="fname">${u.full_name}</div>` : ''}
+          <div class="uname">Reel ID: ${r.id || 'Unknown'}</div>
+          <div class="fname" style="white-space: normal; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;">
+            ${r.caption || 'No caption'}
+          </div>
+          <div style="font-size: 10px; color: #555; margin-top: 4px;">Plays: ${r.play_count || 0}</div>
         </div>
-        ${badges.join('')}
+        <button class="btn-outline" style="padding: 6px 12px; font-size: 10px; flex-shrink: 0;" onclick="downloadWithCobalt('${r.url}')">DOWNLOAD</button>
       `;
       list.appendChild(item);
     });
+  }
+
+  async function downloadWithCobalt(igUrl) {
+    if (!igUrl || !igUrl.includes('instagram.com')) {
+      alert('Invalid Instagram URL for downloading');
+      return;
+    }
+
+    setStatus('Requesting download from Cobalt...', 'active');
+
+    try {
+      const res = await fetch('https://co.wuk.sh/api/json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          url: igUrl,
+          vCodec: "h264",
+          vQuality: "1080",
+          aFormat: "best",
+          isAudioOnly: false
+        })
+      });
+
+      const data = await res.json();
+
+      if (data && data.url) {
+        setStatus('Download starting...', 'success');
+        window.open(data.url, '_blank');
+      } else {
+        setStatus('Cobalt failed to process video.', 'error');
+        console.error('Cobalt response:', data);
+      }
+    } catch (err) {
+      setStatus('Failed to connect to Cobalt API.', 'error');
+      console.error(err);
+    }
   }
 
   function loadMore() {
@@ -379,9 +419,9 @@
 
   function exportCSV() {
     if (!allUsers.length) return;
-    const header = 'username,full_name,profile_url,is_private,is_verified,followers';
-    const rows = allUsers.map(u =>
-      [u.username, u.full_name, u.profile_url, u.is_private, u.is_verified, u.followers]
+    const header = 'id,url,play_count,like_count,taken_at,caption';
+    const rows = allUsers.map(r =>
+      [r.id, r.url, r.play_count, r.like_count, r.taken_at, r.caption]
         .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`)
         .join(',')
     );
@@ -389,14 +429,18 @@
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${lastUsername}_following.csv`;
+    a.download = `${lastUsername}_reels.csv`;
     a.click();
   }
 
-  function copyUsernames() {
-    const names = allUsers.map(u => '@' + u.username).join('\n');
-    navigator.clipboard.writeText(names).then(() => {
-      setStatus(`Copied ${allUsers.length} usernames to clipboard`, 'success');
+  function copyUrls() {
+    const urls = allUsers.map(r => r.url).filter(Boolean).join('\n');
+    if (!urls) {
+      setStatus('No valid URLs to copy.', 'error');
+      return;
+    }
+    navigator.clipboard.writeText(urls).then(() => {
+      setStatus(`Copied ${allUsers.length} Reel URLs to clipboard`, 'success');
     });
   }
 
