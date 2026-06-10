@@ -6,7 +6,8 @@ import os
 app = Flask(__name__)
 CORS(app, origins="*")
 
-RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', 'f620e6d328msha3be7257d181088p184d1bjsn81951ba001c6')
+# Updated with your new API key
+RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', '543d5079e1msh7782c641c938117p185970jsnec52bad3352b')
 RAPIDAPI_HOST = 'instagram-scraper-stable-api.p.rapidapi.com'
 
 HEADERS = {
@@ -129,7 +130,7 @@ def reels():
             code = media.get('code') or media.get('shortcode')
             public_url = f"https://www.instagram.com/reel/{code}/" if code else (media.get('video_url') or '')
 
-            # Extract thumbnail (RapidAPI often puts this in 'candidates')
+            # Extract thumbnail
             thumb = media.get('thumbnail_url') or media.get('display_url') or media.get('image_url')
             if not thumb:
                 candidates = media.get('candidates', [])
@@ -271,4 +272,3 @@ def debug():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
-    
