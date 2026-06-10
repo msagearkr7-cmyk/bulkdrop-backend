@@ -3,37 +3,217 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BulkDrop - Reels Downloader</title>
+<title>BulkDrop</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #0a0a0a; color: #e8e8e8; font-family: 'SF Mono', 'Fira Code', monospace; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-  .logo { font-size: 11px; letter-spacing: 0.3em; color: #444; text-transform: uppercase; margin-bottom: 48px; text-align: center; }
-  .logo span { color: #fff; font-size: 22px; display: block; letter-spacing: 0.15em; margin-bottom: 4px; }
-  .box { width: 100%; max-width: 520px; }
-  input { width: 100%; background: #111; border: 1px solid #222; color: #e8e8e8; padding: 12px 16px; font-family: inherit; font-size: 14px; outline: none; border-radius: 4px; transition: border-color 0.2s; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e8;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .logo {
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: #444;
+    text-transform: uppercase;
+    margin-bottom: 48px;
+    text-align: center;
+  }
+
+  .logo span {
+    color: #fff;
+    font-size: 22px;
+    display: block;
+    letter-spacing: 0.15em;
+    margin-bottom: 4px;
+  }
+
+  .box {
+    width: 100%;
+    max-width: 520px;
+  }
+
+  input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #222;
+    color: #e8e8e8;
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    border-radius: 4px;
+    transition: border-color 0.2s;
+  }
+
   input:focus { border-color: #555; }
-  button { background: #e8e8e8; color: #0a0a0a; border: none; padding: 12px 20px; font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; cursor: pointer; border-radius: 4px; transition: opacity 0.2s; white-space: nowrap; }
+  input::placeholder { color: #333; }
+
+  button {
+    background: #e8e8e8;
+    color: #0a0a0a;
+    border: none;
+    padding: 12px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+  }
+
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
-  .status { font-size: 12px; color: #444; min-height: 20px; margin-top: 14px; margin-bottom: 14px; }
+
+  .status {
+    font-size: 12px;
+    color: #444;
+    min-height: 20px;
+    margin-top: 14px;
+  }
   .status.active { color: #888; }
   .status.error   { color: #e05555; }
   .status.success { color: #55e08a; }
-  .input-row { display: flex; gap: 8px; margin-bottom: 12px; }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
   .input-row input { flex: 1; }
-  .controls-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
-  .controls-row label { font-size: 11px; color: #444; white-space: nowrap; letter-spacing: 0.1em; text-transform: uppercase; }
-  .controls-row input[type="number"] { width: 70px; text-align: center; padding: 8px 10px; }
-  .user-list { display: flex; flex-direction: column; gap: 6px; max-height: 380px; overflow-y: auto; }
-  .user-item { background: #111; border: 1px solid #1a1a1a; border-radius: 4px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; font-size: 12px; }
-  .user-item .avatar { width: 40px; height: 60px; border-radius: 4px; background: #1a1a1a; object-fit: cover; flex-shrink: 0; }
+
+  .controls-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+
+  .controls-row label {
+    font-size: 11px;
+    color: #444;
+    white-space: nowrap;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .controls-row input[type="number"] {
+    width: 70px;
+    text-align: center;
+    padding: 8px 10px;
+  }
+
+  .progress-bar {
+    width: 100%;
+    height: 2px;
+    background: #1a1a1a;
+    border-radius: 1px;
+    margin-bottom: 24px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: #e8e8e8;
+    width: 0%;
+    transition: width 0.3s;
+  }
+
+  .user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 380px;
+    overflow-y: auto;
+  }
+
+  .user-item {
+    background: #111;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+  }
+
+  .user-item .avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
   .user-item .info { flex: 1; overflow: hidden; }
-  .user-item .uname { color: #e8e8e8; font-weight: 700; font-size: 12px; }
-  .action-row { display: flex; gap: 8px; margin-top: 14px; }
-  .action-row button { flex: 1; padding: 10px; font-size: 12px; }
-  .btn-outline { background: transparent; color: #888; border: 1px solid #222; }
+
+  .user-item .uname {
+    color: #e8e8e8;
+    font-weight: 700;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-item .fname {
+    color: #555;
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+  }
+
+  .badge.private  { background: #1a1a1a; color: #555; }
+  .badge.verified { background: #1a2d3d; color: #55aae0; }
+
+  .action-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .action-row button {
+    flex: 1;
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: #888;
+    border: 1px solid #222;
+  }
   .btn-outline:hover { color: #e8e8e8; border-color: #444; opacity: 1; }
-  .backend-note { font-size: 11px; color: #2a2a2a; margin-top: 40px; text-align: center; }
+
+  .backend-note {
+    font-size: 11px;
+    color: #2a2a2a;
+    margin-top: 40px;
+    text-align: center;
+  }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: #0a0a0a; }
   ::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
@@ -43,24 +223,41 @@
 
 <div class="logo">
   <span>BULKDROP</span>
-  instagram reels export & download
+  instagram reels export
 </div>
 
 <div class="box">
+
   <div class="input-row">
     <input type="text" id="username" placeholder="@username or instagram.com/user" />
-    <button id="fetchBtn" onclick="fetchReels()">FETCH</button>
+    <button id="fetchBtn" onclick="fetchFollowing()">FETCH</button>
   </div>
+
   <div class="controls-row">
-    <label>How many:</label>
+    <label title="How many accounts to fetch per request (max 200)">How many:</label>
     <input type="number" id="amount" value="12" min="1" max="200" />
   </div>
-  <div class="status" id="fetchStatus">enter an instagram username to fetch reels</div>
+
+  <div class="status" id="fetchStatus">enter an instagram username to export following list</div>
+
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
   <div class="user-list" id="userList"></div>
+
   <div class="action-row" id="actionRow" style="display:none">
     <button class="btn-outline" onclick="exportCSV()">EXPORT CSV</button>
     <button class="btn-outline" id="loadMoreBtn" onclick="loadMore()">LOAD MORE</button>
+    <button onclick="copyUsernames()">COPY USERNAMES</button>
   </div>
+
+  <div style="margin-top:10px;text-align:right">
+    <button class="btn-outline" style="font-size:10px;padding:6px 12px" onclick="runDebug()" title="Show raw API response to diagnose issues">DEBUG RAW</button>
+  </div>
+
+  <pre id="debugOut" style="display:none;margin-top:12px;background:#111;border:1px solid #1a1a1a;padding:12px;font-size:10px;color:#888;white-space:pre-wrap;max-height:200px;overflow-y:auto;border-radius:4px"></pre>
+
 </div>
 
 <div class="backend-note">
@@ -71,7 +268,7 @@
   const BACKEND = 'https://bulkdrop-backend.onrender.com';
   document.getElementById('backendUrl').textContent = BACKEND;
 
-  let allReels = [];
+  let allUsers = [];
   let lastToken = '';
   let lastUsername = '';
 
@@ -84,15 +281,13 @@
     return input.replace('@', '');
   }
 
-  async function fetchReels(isPaginating = false) {
-    console.log("--- STARTING FETCH ---");
+  async function fetchFollowing(isPaginating = false) {
     const raw = document.getElementById('username').value;
     const username = cleanUsername(raw);
-    console.log("1. Cleaned username:", username);
     if (!username) return;
 
     if (!isPaginating) {
-      allReels = [];
+      allUsers = [];
       lastToken = '';
       lastUsername = username;
       document.getElementById('userList').innerHTML = '';
@@ -103,94 +298,137 @@
     const pageToken = isPaginating ? lastToken : '';
 
     const btn = document.getElementById('fetchBtn');
+    const lmBtn = document.getElementById('loadMoreBtn');
     btn.disabled = true;
-    setStatus(`Fetching Reels for @${username}...`, 'active');
+    if (lmBtn) lmBtn.disabled = true;
+
+    setStatus(`Fetching @${username}...`, 'active');
 
     try {
-      console.log(`2. Pinging backend at ${BACKEND}/reels with amount: ${amount}`);
       const res = await fetch(`${BACKEND}/reels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, amount, pagination_token: pageToken })
       });
-      console.log("3. Backend responded! Status:", res.status);
 
       const data = await res.json();
-      console.log("4. Data parsed from backend:", data);
 
       if (!res.ok) {
         setStatus(data.error || 'Failed to fetch', 'error');
         btn.disabled = false;
+        if (lmBtn) lmBtn.disabled = false;
         return;
       }
 
-      const reels = data.reels || [];
+      const users = data.reels || [];
       lastToken = data.pagination_token || '';
-      allReels = allReels.concat(reels);
-      console.log("5. Reels array extracted. Count:", reels.length);
+      allUsers = allUsers.concat(users);
 
-      if (allReels.length === 0) {
-        setStatus(`No reels found for @${username}`, 'error');
+      if (allUsers.length === 0) {
+        setStatus(`No following data found for @${username}`, 'error');
         btn.disabled = false;
         return;
       }
 
-      setStatus(`Showing ${allReels.length} reels`, 'success');
-      console.log("6. Rendering UI...");
-      renderReels(reels, isPaginating);
+      setStatus(`Showing ${allUsers.length} accounts${data.has_more ? ' — more available' : ''}`, 'success');
+      renderUsers(users, isPaginating);
+
       document.getElementById('actionRow').style.display = 'flex';
-      console.log("--- FETCH COMPLETE ---");
+      if (lmBtn) {
+        lmBtn.disabled = !data.has_more;
+        lmBtn.textContent = data.has_more ? 'LOAD MORE' : 'NO MORE';
+      }
 
     } catch (e) {
-      console.error("CRITICAL ERROR IN FETCH:", e);
-      setStatus('Cannot reach backend — check console', 'error');
+      setStatus('Cannot reach backend — is it running?', 'error');
     }
+
     btn.disabled = false;
   }
 
-  function renderReels(reels, append = false) {
+  function renderUsers(users, append = false) {
     const list = document.getElementById('userList');
     if (!append) list.innerHTML = '';
 
-    reels.forEach(r => {
+    users.forEach(u => {
       const item = document.createElement('div');
       item.className = 'user-item';
+
+      const badges = [];
+      if (u.is_verified) badges.push('<span class="badge verified">✓ VERIFIED</span>');
+      if (u.is_private)  badges.push('<span class="badge private">PRIVATE</span>');
+
       item.innerHTML = `
-        <img class="avatar" src="${r.thumbnail}" onerror="this.style.display='none'" />
+        ${u.profile_pic
+          ? `<img class="avatar" src="${u.profile_pic}" onerror="this.style.display='none'" />`
+          : `<div class="avatar"></div>`}
         <div class="info">
-          <div class="uname">Views: ${r.play_count || 0}</div>
-          <a href="${r.url}" target="_blank" style="color:#55aae0; text-decoration:none; font-size:10px;">View Original ↗</a>
+          <div class="uname">@${u.username || '—'}</div>
+          ${u.full_name ? `<div class="fname">${u.full_name}</div>` : ''}
         </div>
-        <button class="btn-outline" style="padding: 8px 16px;" onclick="downloadCobalt('${r.url}', this)">COBALT DL</button>
+        ${badges.join('')}
       `;
       list.appendChild(item);
     });
   }
 
-  async function downloadCobalt(videoUrl, btnElement) {
-    btnElement.textContent = 'FETCHING...';
-    try {
-      const res = await fetch('https://api.cobalt.tools/', {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: videoUrl })
-      });
-      const data = await res.json();
-      if (data.url) {
-        btnElement.textContent = 'DONE';
-        window.open(data.url, '_blank');
-      } else {
-        btnElement.textContent = 'ERROR';
-      }
-    } catch (e) {
-      console.error(e);
-      btnElement.textContent = 'FAILED';
-    }
+  function loadMore() {
+    if (!lastToken) return;
+    fetchFollowing(true);
+  }
+
+  function exportCSV() {
+    if (!allUsers.length) return;
+    const header = 'username,full_name,profile_url,is_private,is_verified,followers';
+    const rows = allUsers.map(u =>
+      [u.username, u.full_name, u.profile_url, u.is_private, u.is_verified, u.followers]
+        .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${lastUsername}_following.csv`;
+    a.click();
+  }
+
+  function copyUsernames() {
+    const names = allUsers.map(u => '@' + u.username).join('\n');
+    navigator.clipboard.writeText(names).then(() => {
+      setStatus(`Copied ${allUsers.length} usernames to clipboard`, 'success');
+    });
+  }
+
+  function setStatus(msg, type = '') {
+    const el = document.getElementById('fetchStatus');
+    el.textContent = msg;
+    el.className = 'status ' + type;
   }
 
   document.getElementById('username').addEventListener('keydown', e => {
-    if (e.key === 'Enter') fetchReels();
+    if (e.key === 'Enter') fetchFollowing();
   });
+
+  async function runDebug() {
+    const raw = document.getElementById('username').value.trim();
+    if (!raw) { setStatus('Enter a username first', 'error'); return; }
+    const out = document.getElementById('debugOut');
+    out.style.display = 'block';
+    out.textContent = 'Calling /debug ...';
+    try {
+      const res = await fetch(`${BACKEND}/debug`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: raw })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch(e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
 </script>
+
 </body>
 </html>
