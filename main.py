@@ -121,14 +121,22 @@ def reels():
         for item in raw_items:
             if not isinstance(item, dict):
                 continue
+            
+            # Unwrap standard Instagram GraphQL structures
+            media = item.get('media') or item.get('node', {}).get('media') or item
+            
+            # Attempt to build public share URL for Cobalt
+            code = media.get('code') or media.get('shortcode')
+            public_url = f"https://www.instagram.com/reel/{code}/" if code else (media.get('video_url') or '')
+
             items.append({
-                'id':          item.get('id') or item.get('pk') or '',
-                'url':         item.get('video_url') or item.get('url') or '',
-                'thumbnail':   item.get('thumbnail_url') or item.get('display_url') or item.get('image_url') or '',
-                'caption':     (item.get('caption') or {}).get('text', '') if isinstance(item.get('caption'), dict) else item.get('caption', ''),
-                'play_count':  item.get('play_count') or item.get('view_count') or 0,
-                'like_count':  item.get('like_count') or 0,
-                'taken_at':    item.get('taken_at') or item.get('timestamp') or '',
+                'id':          media.get('id') or media.get('pk') or '',
+                'url':         public_url,
+                'thumbnail':   media.get('thumbnail_url') or media.get('display_url') or media.get('image_url') or '',
+                'caption':     (media.get('caption') or {}).get('text', '') if isinstance(media.get('caption'), dict) else str(media.get('caption', '')),
+                'play_count':  media.get('play_count') or media.get('view_count') or 0,
+                'like_count':  media.get('like_count') or 0,
+                'taken_at':    media.get('taken_at') or media.get('timestamp') or '',
             })
 
         if not items:
