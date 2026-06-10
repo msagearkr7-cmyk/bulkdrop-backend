@@ -129,11 +129,26 @@ def reels():
             code = media.get('code') or media.get('shortcode')
             public_url = f"https://www.instagram.com/reel/{code}/" if code else (media.get('video_url') or '')
 
+            # Extract thumbnail (RapidAPI often puts this in 'candidates')
+            thumb = media.get('thumbnail_url') or media.get('display_url') or media.get('image_url')
+            if not thumb:
+                candidates = media.get('candidates', [])
+                if isinstance(candidates, list) and len(candidates) > 0:
+                    thumb = candidates[0].get('url', '')
+
+            # Extract caption safely
+            caption_obj = media.get('caption')
+            caption_text = ''
+            if isinstance(caption_obj, dict):
+                caption_text = caption_obj.get('text', '')
+            elif isinstance(caption_obj, str):
+                caption_text = caption_obj
+
             items.append({
                 'id':          media.get('id') or media.get('pk') or '',
                 'url':         public_url,
-                'thumbnail':   media.get('thumbnail_url') or media.get('display_url') or media.get('image_url') or '',
-                'caption':     (media.get('caption') or {}).get('text', '') if isinstance(media.get('caption'), dict) else str(media.get('caption', '')),
+                'thumbnail':   thumb or '',
+                'caption':     caption_text or 'No caption',
                 'play_count':  media.get('play_count') or media.get('view_count') or 0,
                 'like_count':  media.get('like_count') or 0,
                 'taken_at':    media.get('taken_at') or media.get('timestamp') or '',
@@ -161,6 +176,42 @@ def reels():
         return jsonify({'error': 'Request timed out'}), 504
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot reach RapidAPI'}), 503
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── COBALT DOWNLOADER ─────────────────────────────────────────────────────────
+@app.route('/download', methods=['POST'])
+def download():
+    data = request.json or {}
+    ig_url = data.get('url')
+    
+    if not ig_url:
+        return jsonify({'error': 'Instagram URL required'}), 400
+
+    try:
+        # Route through the official Cobalt API via backend to bypass CORS
+        resp = requests.post(
+            'https://api.cobalt.tools/api/json',
+            headers={
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            json={
+                'url': ig_url,
+                'vCodec': 'h264',
+                'vQuality': '1080',
+                'aFormat': 'best',
+                'isAudioOnly': False
+            },
+            timeout=30
+        )
+        
+        if not resp.ok:
+            return jsonify({'error': f'Cobalt API error: {resp.status_code}'}), 502
+            
+        return jsonify(resp.json())
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
