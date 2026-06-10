@@ -223,7 +223,7 @@
 
 <div class="logo">
   <span>BULKDROP</span>
-  instagram following export
+  instagram reels export
 </div>
 
 <div class="box">
@@ -305,7 +305,7 @@
     setStatus(`Fetching @${username}...`, 'active');
 
     try {
-      const res = await fetch(`${BACKEND}/scrape`, {
+      const res = await fetch(`${BACKEND}/reels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, amount, pagination_token: pageToken })
@@ -320,7 +320,7 @@
         return;
       }
 
-      const users = data.following || [];
+      const users = data.reels || [];
       lastToken = data.pagination_token || '';
       allUsers = allUsers.concat(users);
 
