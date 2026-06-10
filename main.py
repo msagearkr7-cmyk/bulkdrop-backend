@@ -1,90 +1,114 @@
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify
 from flask_cors import CORS
-import instaloader
+import requests
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'bulkdrop-secret-2024')
-CORS(app, supports_credentials=True, origins="*")
+CORS(app, origins="*")
+
+RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', 'f620e6d328msha3be7257d181088p184d1bjsn81951ba001c6')
+RAPIDAPI_HOST = 'instagram-scraper-stable-api.p.rapidapi.com'
 
 @app.route('/')
 def home():
     return "BulkDrop IG Backend Running"
 
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.json
-    username = data.get('username', '').strip()
-    password = data.get('password', '').strip()
-
-    if not username or not password:
-        return jsonify({'error': 'Username and password required'}), 400
-
-    try:
-        L = instaloader.Instaloader()
-        L.login(username, password)
-        # Store credentials in session
-        session['ig_user'] = username
-        session['ig_pass'] = password
-        return jsonify({'success': True, 'username': username})
-    except instaloader.exceptions.BadCredentialsException:
-        return jsonify({'error': 'Wrong username or password'}), 401
-    except instaloader.exceptions.TwoFactorAuthRequiredException:
-        return jsonify({'error': '2FA is enabled on this account — disable it first'}), 403
-    except instaloader.exceptions.ConnectionException as e:
-        return jsonify({'error': f'Connection error: {str(e)}'}), 503
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/scrape', methods=['POST'])
 def scrape():
     data = request.json
-    username = data.get('username', '').strip().lstrip('@')
-    ig_user = data.get('ig_user', '').strip()
-    ig_pass = data.get('ig_pass', '').strip()
+    raw = data.get('username', '').strip()
 
-    if not username:
+    if not raw:
         return jsonify({'error': 'Username required'}), 400
 
+    # Accept full URL or plain username
+    if 'instagram.com' in raw:
+        ig_url = raw if raw.startswith('http') else 'https://' + raw
+        username = ig_url.rstrip('/').split('/')[-1]
+    else:
+        username = raw.lstrip('@')
+        ig_url = f'https://www.instagram.com/{username}/'
+
+    amount = int(data.get('amount', 50))
+    pagination_token = data.get('pagination_token', '')
+
     try:
-        L = instaloader.Instaloader()
+        response = requests.post(
+            f'https://{RAPIDAPI_HOST}/get_ig_user_followers_v2.php',
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'x-rapidapi-host': RAPIDAPI_HOST,
+                'x-rapidapi-key': RAPIDAPI_KEY,
+            },
+            data={
+                'username_or_url': ig_url,
+                'data': 'following',
+                'amount': amount,
+                'pagination_token': pagination_token,
+            }
+        )
 
-        # Login with credentials passed from frontend
-        if ig_user and ig_pass:
-            try:
-                L.login(ig_user, ig_pass)
-            except Exception:
-                pass  # Continue even if re-login fails (already verified at /login)
+        if response.status_code == 429:
+            return jsonify({'error': 'RapidAPI rate limit hit — try again shortly'}), 429
 
-        profile = instaloader.Profile.from_username(L.context, username)
+        if not response.ok:
+            return jsonify({'error': f'RapidAPI error {response.status_code}: {response.text[:200]}'}), 502
 
-        video_urls = []
-        count = 0
+        result = response.json()
 
-        for post in profile.get_posts():
-            if count >= 50:
-                break
-            if post.is_video:
-                video_urls.append({
-                    'url': post.video_url,
-                    'shortcode': post.shortcode,
-                    'timestamp': str(post.date_utc)
+        # Normalise the response into a consistent shape
+        # The API returns data in result['data'] or similar — handle both shapes
+        items = []
+        next_token = ''
+
+        if isinstance(result, dict):
+            # Common response shapes from this API
+            raw_items = (
+                result.get('data') or
+                result.get('following') or
+                result.get('users') or
+                result.get('result') or
+                []
+            )
+            next_token = (
+                result.get('pagination_token') or
+                result.get('next_max_id') or
+                result.get('next_cursor') or
+                ''
+            )
+        elif isinstance(result, list):
+            raw_items = result
+        else:
+            raw_items = []
+
+        for item in raw_items:
+            if isinstance(item, dict):
+                items.append({
+                    'username': item.get('username') or item.get('user') or '',
+                    'full_name': item.get('full_name') or item.get('name') or '',
+                    'profile_url': f"https://www.instagram.com/{item.get('username', '')}/" if item.get('username') else '',
+                    'is_private': item.get('is_private', False),
+                    'is_verified': item.get('is_verified', False),
+                    'followers': item.get('follower_count') or item.get('followers') or 0,
+                    'profile_pic': item.get('profile_pic_url') or item.get('profile_pic') or '',
                 })
-                count += 1
 
         return jsonify({
             'username': username,
-            'total': len(video_urls),
-            'videos': video_urls
+            'total': len(items),
+            'following': items,
+            'pagination_token': next_token,
+            'has_more': bool(next_token),
         })
 
-    except instaloader.exceptions.ProfileNotExistsException:
-        return jsonify({'error': f'Profile @{username} not found'}), 404
-    except instaloader.exceptions.PrivateProfileNotFollowedException:
-        return jsonify({'error': f'@{username} is a private account'}), 403
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'Request timed out — try again'}), 504
+    except requests.exceptions.ConnectionError:
+        return jsonify({'error': 'Cannot reach RapidAPI — check network'}), 503
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
-    
