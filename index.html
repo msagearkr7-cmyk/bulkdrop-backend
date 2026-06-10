@@ -375,39 +375,31 @@
 
   async function downloadWithCobalt(igUrl) {
     if (!igUrl || !igUrl.includes('instagram.com')) {
-      alert('Invalid Instagram URL for downloading');
+      setStatus('Invalid Instagram URL for downloading. Re-fetch the data.', 'error');
       return;
     }
 
-    setStatus('Requesting download from Cobalt...', 'active');
+    setStatus('Requesting download via backend...', 'active');
 
     try {
-      const res = await fetch('https://co.wuk.sh/api/json', {
+      // Call your Render backend instead of Cobalt directly
+      const res = await fetch(`${BACKEND}/download`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          url: igUrl,
-          vCodec: "h264",
-          vQuality: "1080",
-          aFormat: "best",
-          isAudioOnly: false
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: igUrl })
       });
 
       const data = await res.json();
 
-      if (data && data.url) {
+      if (res.ok && data && data.url) {
         setStatus('Download starting...', 'success');
         window.open(data.url, '_blank');
       } else {
-        setStatus('Cobalt failed to process video.', 'error');
-        console.error('Cobalt response:', data);
+        setStatus(data.error || 'Cobalt failed to process the video.', 'error');
+        console.error('Backend Download Error:', data);
       }
     } catch (err) {
-      setStatus('Failed to connect to Cobalt API.', 'error');
+      setStatus('Failed to reach backend for downloading.', 'error');
       console.error(err);
     }
   }
