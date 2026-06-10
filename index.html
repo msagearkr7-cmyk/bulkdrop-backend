@@ -234,10 +234,8 @@
   </div>
 
   <div class="controls-row">
-    <label>Amount:</label>
+    <label title="How many accounts to fetch per request (max 200)">How many:</label>
     <input type="number" id="amount" value="12" min="1" max="200" />
-    <label style="margin-left:8px">Token:</label>
-    <input type="text" id="pageToken" placeholder="pagination token (optional)" style="flex:1" />
   </div>
 
   <div class="status" id="fetchStatus">enter an instagram username to export following list</div>
@@ -253,6 +251,12 @@
     <button class="btn-outline" id="loadMoreBtn" onclick="loadMore()">LOAD MORE</button>
     <button onclick="copyUsernames()">COPY USERNAMES</button>
   </div>
+
+  <div style="margin-top:10px;text-align:right">
+    <button class="btn-outline" style="font-size:10px;padding:6px 12px" onclick="runDebug()" title="Show raw API response to diagnose issues">DEBUG RAW</button>
+  </div>
+
+  <pre id="debugOut" style="display:none;margin-top:12px;background:#111;border:1px solid #1a1a1a;padding:12px;font-size:10px;color:#888;white-space:pre-wrap;max-height:200px;overflow-y:auto;border-radius:4px"></pre>
 
 </div>
 
@@ -291,7 +295,7 @@
     }
 
     const amount = parseInt(document.getElementById('amount').value) || 12;
-    const pageToken = isPaginating ? lastToken : document.getElementById('pageToken').value.trim();
+    const pageToken = isPaginating ? lastToken : '';
 
     const btn = document.getElementById('fetchBtn');
     const lmBtn = document.getElementById('loadMoreBtn');
@@ -405,6 +409,25 @@
   document.getElementById('username').addEventListener('keydown', e => {
     if (e.key === 'Enter') fetchFollowing();
   });
+
+  async function runDebug() {
+    const raw = document.getElementById('username').value.trim();
+    if (!raw) { setStatus('Enter a username first', 'error'); return; }
+    const out = document.getElementById('debugOut');
+    out.style.display = 'block';
+    out.textContent = 'Calling /debug ...';
+    try {
+      const res = await fetch(`${BACKEND}/debug`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: raw })
+      });
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    } catch(e) {
+      out.textContent = 'Error: ' + e.message;
+    }
+  }
 </script>
 
 </body>
