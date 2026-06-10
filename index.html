@@ -38,24 +38,7 @@
 
   .box {
     width: 100%;
-    max-width: 480px;
-  }
-
-  /* ── SCREEN TRANSITIONS ── */
-  .screen { display: none; }
-  .screen.active { display: block; }
-
-  /* ── LOGIN SCREEN ── */
-  .login-label {
-    font-size: 11px;
-    color: #444;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-bottom: 20px;
-  }
-
-  .field {
-    margin-bottom: 10px;
+    max-width: 520px;
   }
 
   input {
@@ -92,64 +75,42 @@
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  #loginBtn {
-    width: 100%;
-    margin-top: 6px;
-    padding: 13px;
-  }
-
   .status {
     font-size: 12px;
     color: #444;
     min-height: 20px;
     margin-top: 14px;
   }
-
   .status.active { color: #888; }
-  .status.error { color: #e05555; }
+  .status.error   { color: #e05555; }
   .status.success { color: #55e08a; }
-
-  /* ── DOWNLOADER SCREEN ── */
-  .user-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 28px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid #1a1a1a;
-  }
-
-  .user-bar .who {
-    font-size: 12px;
-    color: #555;
-  }
-
-  .user-bar .who span {
-    color: #55e08a;
-  }
-
-  .logout-btn {
-    background: transparent;
-    color: #444;
-    border: 1px solid #1e1e1e;
-    padding: 5px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-  }
-
-  .logout-btn:hover { color: #e05555; border-color: #3d1a1a; opacity: 1; }
 
   .input-row {
     display: flex;
     gap: 8px;
     margin-bottom: 12px;
   }
-
   .input-row input { flex: 1; }
 
-  #fetchBtn {
-    flex-shrink: 0;
+  .controls-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+
+  .controls-row label {
+    font-size: 11px;
+    color: #444;
+    white-space: nowrap;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .controls-row input[type="number"] {
+    width: 70px;
+    text-align: center;
+    padding: 8px 10px;
   }
 
   .progress-bar {
@@ -169,54 +130,82 @@
     transition: width 0.3s;
   }
 
-  .video-list {
+  .user-list {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 320px;
+    max-height: 380px;
     overflow-y: auto;
   }
 
-  .video-item {
+  .user-item {
     background: #111;
     border: 1px solid #1a1a1a;
     border-radius: 4px;
     padding: 10px 14px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 10px;
     font-size: 12px;
-    gap: 12px;
   }
 
-  .video-item .code {
-    color: #555;
-    font-size: 11px;
-    flex: 1;
+  .user-item .avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .user-item .info { flex: 1; overflow: hidden; }
+
+  .user-item .uname {
+    color: #e8e8e8;
+    font-weight: 700;
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .video-item .dl-btn {
-    background: transparent;
-    color: #888;
-    border: 1px solid #222;
-    padding: 4px 10px;
+  .user-item .fname {
+    color: #555;
     font-size: 11px;
-    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
     letter-spacing: 0.05em;
     flex-shrink: 0;
   }
 
-  .video-item .dl-btn:hover { color: #e8e8e8; border-color: #444; opacity: 1; }
-  .video-item .dl-btn.done { color: #55e08a; border-color: #1a3d2a; }
+  .badge.private  { background: #1a1a1a; color: #555; }
+  .badge.verified { background: #1a2d3d; color: #55aae0; }
 
-  .dl-all-btn {
-    width: 100%;
-    margin-top: 12px;
-    display: none;
+  .action-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
   }
+
+  .action-row button {
+    flex: 1;
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .btn-outline {
+    background: transparent;
+    color: #888;
+    border: 1px solid #222;
+  }
+  .btn-outline:hover { color: #e8e8e8; border-color: #444; opacity: 1; }
 
   .backend-note {
     font-size: 11px;
@@ -234,49 +223,35 @@
 
 <div class="logo">
   <span>BULKDROP</span>
-  instagram video downloader
+  instagram following export
 </div>
 
 <div class="box">
 
-  <!-- ── LOGIN SCREEN ── -->
-  <div class="screen active" id="loginScreen">
-    <div class="login-label">sign in with instagram</div>
-
-    <div class="field">
-      <input type="text" id="igUser" placeholder="instagram username" autocomplete="username" />
-    </div>
-    <div class="field">
-      <input type="password" id="igPass" placeholder="password" autocomplete="current-password" />
-    </div>
-
-    <button id="loginBtn" onclick="doLogin()">SIGN IN</button>
-
-    <div class="status" id="loginStatus">use a burner account — not your main one</div>
+  <div class="input-row">
+    <input type="text" id="username" placeholder="@username or instagram.com/user" />
+    <button id="fetchBtn" onclick="fetchFollowing()">FETCH</button>
   </div>
 
-  <!-- ── DOWNLOADER SCREEN ── -->
-  <div class="screen" id="downloaderScreen">
+  <div class="controls-row">
+    <label>Amount:</label>
+    <input type="number" id="amount" value="12" min="1" max="200" />
+    <label style="margin-left:8px">Token:</label>
+    <input type="text" id="pageToken" placeholder="pagination token (optional)" style="flex:1" />
+  </div>
 
-    <div class="user-bar">
-      <div class="who">signed in as <span id="loggedInAs"></span></div>
-      <button class="logout-btn" onclick="doLogout()">SIGN OUT</button>
-    </div>
+  <div class="status" id="fetchStatus">enter an instagram username to export following list</div>
 
-    <div class="input-row">
-      <input type="text" id="username" placeholder="@username or profile URL" />
-      <button id="fetchBtn" onclick="fetchVideos()">FETCH</button>
-    </div>
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
 
-    <div class="status" id="fetchStatus">enter a public instagram username</div>
+  <div class="user-list" id="userList"></div>
 
-    <div class="progress-bar" id="progressBar">
-      <div class="progress-fill" id="progressFill"></div>
-    </div>
-
-    <div class="video-list" id="videoList"></div>
-
-    <button class="dl-all-btn" id="dlAllBtn" onclick="downloadAll()">DOWNLOAD ALL</button>
+  <div class="action-row" id="actionRow" style="display:none">
+    <button class="btn-outline" onclick="exportCSV()">EXPORT CSV</button>
+    <button class="btn-outline" id="loadMoreBtn" onclick="loadMore()">LOAD MORE</button>
+    <button onclick="copyUsernames()">COPY USERNAMES</button>
   </div>
 
 </div>
@@ -289,69 +264,10 @@
   const BACKEND = 'https://bulkdrop-backend.onrender.com';
   document.getElementById('backendUrl').textContent = BACKEND;
 
-  let videos = [];
-  let currentIgUser = '';
-  let currentIgPass = '';
+  let allUsers = [];
+  let lastToken = '';
+  let lastUsername = '';
 
-  // ── LOGIN ──
-  async function doLogin() {
-    const user = document.getElementById('igUser').value.trim().replace('@','');
-    const pass = document.getElementById('igPass').value.trim();
-
-    if (!user || !pass) {
-      setLoginStatus('Enter both username and password', 'error');
-      return;
-    }
-
-    const btn = document.getElementById('loginBtn');
-    btn.disabled = true;
-    setLoginStatus('Signing in...', 'active');
-
-    try {
-      const res = await fetch(`${BACKEND}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: user, password: pass })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setLoginStatus(data.error || 'Login failed', 'error');
-        btn.disabled = false;
-        return;
-      }
-
-      // Success — store and switch screens
-      currentIgUser = user;
-      currentIgPass = pass;
-      setLoginStatus('', '');
-      document.getElementById('loggedInAs').textContent = '@' + user;
-      showScreen('downloaderScreen');
-
-    } catch (e) {
-      setLoginStatus('Cannot reach backend — is it running?', 'error');
-    }
-
-    btn.disabled = false;
-  }
-
-  function doLogout() {
-    currentIgUser = '';
-    currentIgPass = '';
-    document.getElementById('igPass').value = '';
-    document.getElementById('videoList').innerHTML = '';
-    document.getElementById('dlAllBtn').style.display = 'none';
-    setFetchStatus('enter a public instagram username', '');
-    showScreen('loginScreen');
-  }
-
-  function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-  }
-
-  // ── FETCH VIDEOS ──
   function cleanUsername(input) {
     input = input.trim();
     if (input.includes('instagram.com')) {
@@ -361,152 +277,133 @@
     return input.replace('@', '');
   }
 
-  async function fetchVideos() {
+  async function fetchFollowing(isPaginating = false) {
     const raw = document.getElementById('username').value;
     const username = cleanUsername(raw);
     if (!username) return;
 
+    if (!isPaginating) {
+      allUsers = [];
+      lastToken = '';
+      lastUsername = username;
+      document.getElementById('userList').innerHTML = '';
+      document.getElementById('actionRow').style.display = 'none';
+    }
+
+    const amount = parseInt(document.getElementById('amount').value) || 12;
+    const pageToken = isPaginating ? lastToken : document.getElementById('pageToken').value.trim();
+
     const btn = document.getElementById('fetchBtn');
-    const list = document.getElementById('videoList');
-    const dlAll = document.getElementById('dlAllBtn');
-    const bar = document.getElementById('progressBar');
-
+    const lmBtn = document.getElementById('loadMoreBtn');
     btn.disabled = true;
-    list.innerHTML = '';
-    dlAll.style.display = 'none';
-    bar.style.display = 'none';
-    videos = [];
+    if (lmBtn) lmBtn.disabled = true;
 
-    setFetchStatus(`Fetching @${username}...`, 'active');
+    setStatus(`Fetching @${username}...`, 'active');
 
     try {
       const res = await fetch(`${BACKEND}/scrape`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          ig_user: currentIgUser,
-          ig_pass: currentIgPass
-        })
+        body: JSON.stringify({ username, amount, pagination_token: pageToken })
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setFetchStatus(data.error || 'Failed to fetch', 'error');
+        setStatus(data.error || 'Failed to fetch', 'error');
+        btn.disabled = false;
+        if (lmBtn) lmBtn.disabled = false;
+        return;
+      }
+
+      const users = data.following || [];
+      lastToken = data.pagination_token || '';
+      allUsers = allUsers.concat(users);
+
+      if (allUsers.length === 0) {
+        setStatus(`No following data found for @${username}`, 'error');
         btn.disabled = false;
         return;
       }
 
-      videos = data.videos;
+      setStatus(`Showing ${allUsers.length} accounts${data.has_more ? ' — more available' : ''}`, 'success');
+      renderUsers(users, isPaginating);
 
-      if (videos.length === 0) {
-        setFetchStatus(`No videos found on @${username}`, 'error');
-        btn.disabled = false;
-        return;
+      document.getElementById('actionRow').style.display = 'flex';
+      if (lmBtn) {
+        lmBtn.disabled = !data.has_more;
+        lmBtn.textContent = data.has_more ? 'LOAD MORE' : 'NO MORE';
       }
-
-      setFetchStatus(`Found ${videos.length} videos`, 'success');
-
-      videos.forEach((v, i) => {
-        const item = document.createElement('div');
-        item.className = 'video-item';
-        item.id = `item-${i}`;
-        item.innerHTML = `
-          <span class="code">${v.shortcode} · ${v.timestamp.slice(0, 10)}</span>
-          <button class="dl-btn" onclick="downloadOne(${i})">DL</button>
-        `;
-        list.appendChild(item);
-      });
-
-      dlAll.style.display = 'block';
 
     } catch (e) {
-      setFetchStatus('Cannot reach backend — is it running?', 'error');
+      setStatus('Cannot reach backend — is it running?', 'error');
     }
 
     btn.disabled = false;
   }
 
-  // ── DOWNLOAD ──
-  function downloadOne(i) {
-    const v = videos[i];
-    const btn = document.querySelector(`#item-${i} .dl-btn`);
+  function renderUsers(users, append = false) {
+    const list = document.getElementById('userList');
+    if (!append) list.innerHTML = '';
 
-    fetch('https://cobalt.tools/api/json', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ url: `https://www.instagram.com/p/${v.shortcode}/`, vCodec: 'h264', vQuality: '720' })
-    })
-    .then(r => r.json())
-    .then(data => {
-      triggerDownload(data.url || v.url, `${v.shortcode}.mp4`);
-      markDone(btn);
-    })
-    .catch(() => {
-      triggerDownload(v.url, `${v.shortcode}.mp4`);
-      markDone(btn);
+    users.forEach(u => {
+      const item = document.createElement('div');
+      item.className = 'user-item';
+
+      const badges = [];
+      if (u.is_verified) badges.push('<span class="badge verified">✓ VERIFIED</span>');
+      if (u.is_private)  badges.push('<span class="badge private">PRIVATE</span>');
+
+      item.innerHTML = `
+        ${u.profile_pic
+          ? `<img class="avatar" src="${u.profile_pic}" onerror="this.style.display='none'" />`
+          : `<div class="avatar"></div>`}
+        <div class="info">
+          <div class="uname">@${u.username || '—'}</div>
+          ${u.full_name ? `<div class="fname">${u.full_name}</div>` : ''}
+        </div>
+        ${badges.join('')}
+      `;
+      list.appendChild(item);
     });
   }
 
-  async function downloadAll() {
-    const bar = document.getElementById('progressBar');
-    const fill = document.getElementById('progressFill');
-    const dlAll = document.getElementById('dlAllBtn');
-
-    bar.style.display = 'block';
-    dlAll.disabled = true;
-    setFetchStatus('Downloading...', 'active');
-
-    for (let i = 0; i < videos.length; i++) {
-      downloadOne(i);
-      fill.style.width = `${((i + 1) / videos.length) * 100}%`;
-      await sleep(800);
-    }
-
-    setFetchStatus(`All ${videos.length} downloads triggered`, 'success');
-    dlAll.disabled = false;
+  function loadMore() {
+    if (!lastToken) return;
+    fetchFollowing(true);
   }
 
-  function triggerDownload(url, filename) {
+  function exportCSV() {
+    if (!allUsers.length) return;
+    const header = 'username,full_name,profile_url,is_private,is_verified,followers';
+    const rows = allUsers.map(u =>
+      [u.username, u.full_name, u.profile_url, u.is_private, u.is_verified, u.followers]
+        .map(v => `"${String(v ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.target = '_blank';
-    document.body.appendChild(a);
+    a.href = URL.createObjectURL(blob);
+    a.download = `${lastUsername}_following.csv`;
     a.click();
-    document.body.removeChild(a);
   }
 
-  function markDone(btn) {
-    btn.textContent = '✓';
-    btn.classList.add('done');
+  function copyUsernames() {
+    const names = allUsers.map(u => '@' + u.username).join('\n');
+    navigator.clipboard.writeText(names).then(() => {
+      setStatus(`Copied ${allUsers.length} usernames to clipboard`, 'success');
+    });
   }
 
-  // ── UTILS ──
-  function setLoginStatus(msg, type = '') {
-    const el = document.getElementById('loginStatus');
-    el.textContent = msg;
-    el.className = 'status ' + type;
-  }
-
-  function setFetchStatus(msg, type = '') {
+  function setStatus(msg, type = '') {
     const el = document.getElementById('fetchStatus');
     el.textContent = msg;
     el.className = 'status ' + type;
   }
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  // Enter key on login fields
-  ['igUser','igPass'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => {
-      if (e.key === 'Enter') doLogin();
-    });
-  });
-
   document.getElementById('username').addEventListener('keydown', e => {
-    if (e.key === 'Enter') fetchVideos();
+    if (e.key === 'Enter') fetchFollowing();
   });
 </script>
 
