@@ -191,30 +191,36 @@ def download():
         return jsonify({'error': 'Instagram URL required'}), 400
 
     try:
-        # Route through the official Cobalt API via backend to bypass CORS
+        # Route through the official Cobalt API (Updated to v7 schema)
         resp = requests.post(
-            'https://api.cobalt.tools/api/json',
+            'https://api.cobalt.tools/',
             headers={
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                # Adding a generic User-Agent helps bypass basic bot protection blocks
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             },
             json={
                 'url': ig_url,
-                'vCodec': 'h264',
-                'vQuality': '1080',
-                'aFormat': 'best',
-                'isAudioOnly': False
+                'videoQuality': '1080'
             },
             timeout=30
         )
         
         if not resp.ok:
-            return jsonify({'error': f'Cobalt API error: {resp.status_code}'}), 502
+            # Safely attempt to parse Cobalt's exact error message for easier debugging
+            try:
+                error_msg = resp.json().get('error', {}).get('text', 'Unknown Error')
+            except Exception:
+                error_msg = resp.text[:100]
+                
+            return jsonify({'error': f'Cobalt API error: {resp.status_code} - {error_msg}'}), 502
             
         return jsonify(resp.json())
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 
 # ── POSTS (bonus) ─────────────────────────────────────────────────────────────
