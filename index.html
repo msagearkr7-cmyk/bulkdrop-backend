@@ -113,23 +113,6 @@
     padding: 8px 10px;
   }
 
-  .progress-bar {
-    width: 100%;
-    height: 2px;
-    background: #1a1a1a;
-    border-radius: 1px;
-    margin-bottom: 24px;
-    overflow: hidden;
-    display: none;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: #e8e8e8;
-    width: 0%;
-    transition: width 0.3s;
-  }
-
   .user-list {
     display: flex;
     flex-direction: column;
@@ -177,25 +160,15 @@
     white-space: nowrap;
   }
 
-  .badge {
-    font-size: 10px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    letter-spacing: 0.05em;
-    flex-shrink: 0;
-  }
-
-  .badge.private  { background: #1a1a1a; color: #555; }
-  .badge.verified { background: #1a2d3d; color: #55aae0; }
-
   .action-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 14px;
   }
 
   .action-row button {
-    flex: 1;
+    flex: 1 1 calc(50% - 4px);
     padding: 10px;
     font-size: 12px;
   }
@@ -206,6 +179,11 @@
     border: 1px solid #222;
   }
   .btn-outline:hover { color: #e8e8e8; border-color: #444; opacity: 1; }
+  
+  .btn-accent {
+    background: #55e08a;
+    color: #0a0a0a;
+  }
 
   .backend-note {
     font-size: 11px;
@@ -240,16 +218,13 @@
 
   <div class="status" id="fetchStatus">enter an instagram username to fetch reels</div>
 
-  <div class="progress-bar" id="progressBar">
-    <div class="progress-fill" id="progressFill"></div>
-  </div>
-
   <div class="user-list" id="userList"></div>
 
   <div class="action-row" id="actionRow" style="display:none">
     <button class="btn-outline" onclick="exportCSV()">EXPORT CSV</button>
     <button class="btn-outline" id="loadMoreBtn" onclick="loadMore()">LOAD MORE</button>
-    <button onclick="copyUrls()">COPY URLS</button>
+    <button class="btn-outline" onclick="copyUrls()">COPY URLS</button>
+    <button class="btn-accent" id="downloadAllBtn" onclick="downloadAllReels()">DOWNLOAD ALL</button>
   </div>
 
   <div style="margin-top:10px;text-align:right">
@@ -382,7 +357,6 @@
     setStatus('Requesting download via backend...', 'active');
 
     try {
-      // Call your Render backend instead of Cobalt directly
       const res = await fetch(`${BACKEND}/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -402,6 +376,54 @@
       setStatus('Failed to reach backend for downloading.', 'error');
       console.error(err);
     }
+  }
+
+  // --- NEW: Download All feature with 2s delay ---
+  async function downloadAllReels() {
+    if (!allUsers.length) {
+      setStatus('No reels loaded to download.', 'error');
+      return;
+    }
+
+    // Remind user about pop-up blockers
+    alert("NOTE: If your browser blocks pop-ups, only the first video will open. Look at the URL bar, click 'Always allow pop-ups for this site', and try again!");
+
+    const btn = document.getElementById('downloadAllBtn');
+    btn.disabled = true;
+
+    for (let i = 0; i < allUsers.length; i++) {
+      const reel = allUsers[i];
+      if (!reel.url) continue;
+
+      setStatus(`Downloading video ${i + 1} of ${allUsers.length}...`, 'active');
+      
+      try {
+        const res = await fetch(`${BACKEND}/download`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: reel.url })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok && data && data.url) {
+          window.open(data.url, '_blank');
+        } else {
+          console.error(`Failed on video ${i + 1}`, data);
+        }
+      } catch (err) {
+        console.error(`Network error on video ${i + 1}`, err);
+      }
+
+      // If it's not the last video, wait 2 seconds
+      if (i < allUsers.length - 1) {
+        setStatus(`Waiting 2 seconds before next download... (${i + 1}/${allUsers.length})`, 'active');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+
+    setStatus('Finished sending all download requests!', 'success');
+    btn.disabled = false;
   }
 
   function loadMore() {
@@ -468,3 +490,4 @@
 
 </body>
 </html>
+
