@@ -1,7 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import yt_dlp
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app, origins="*")
@@ -19,7 +20,7 @@ def handle_incoming_cookies(cookies_text):
 
 @app.route('/')
 def home():
-    return "BulkDrop Direct URL Resolver Running"
+    return "BulkDrop Multi-Platform Engine Running"
 
 @app.route('/download', methods=['POST'])
 def download():
@@ -32,11 +33,13 @@ def download():
 
     handle_incoming_cookies(cookies_text)
 
-    # yt-dlp config to extract the highest quality MP4 directly
     ydl_opts = {
         'format': 'best',
         'quiet': True,
         'no_warnings': True,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        }
     }
     
     if os.path.exists('cookies.txt'):
@@ -53,6 +56,28 @@ def download():
             return jsonify({'url': direct_url})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# NEW PROXY ROUTE FOR TIKTOK
+@app.route('/proxy', methods=['GET'])
+def proxy_video():
+    video_url = request.args.get('url')
+    if not video_url:
+        return "No URL provided", 400
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.tiktok.com/'
+    }
+    
+    try:
+        req = requests.get(video_url, headers=headers, stream=True, timeout=15)
+        return Response(
+            req.iter_content(chunk_size=1024 * 1024),
+            content_type=req.headers.get('Content-Type', 'video/mp4'),
+            headers={'Content-Disposition': 'attachment; filename="bulkdrop_video.mp4"'}
+        )
+    except Exception as e:
+        return str(e), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
