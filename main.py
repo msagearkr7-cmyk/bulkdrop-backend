@@ -27,6 +27,7 @@ def download():
     data = request.json or {}
     url = data.get('url')
     cookies_text = data.get('cookies', '').strip()
+    use_proxy = data.get('proxy', False)  # The frontend will set this to True for TikTok
     
     if not url:
         return jsonify({'error': 'URL required'}), 400
@@ -47,37 +48,32 @@ def download():
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # 1. Extract the raw info dictionary
             info = ydl.extract_info(url, download=False)
             
             direct_url = info.get('url')
             if not direct_url and info.get('requested_downloads'):
                 direct_url = info['requested_downloads'][0].get('url')
+
+            if use_proxy:
+                # 2. PROXY MODE: Grab the exact headers yt-dlp used to trick TikTok
+                headers = info.get('http_headers', {})
                 
-            return jsonify({'url': direct_url})
+                # 3. Stream the video directly from TikTok to Render
+                req = requests.get(direct_url, headers=headers, stream=True, timeout=15)
+                
+                # 4. Pipe the raw video stream straight back to the user's phone
+                return Response(
+                    req.iter_content(chunk_size=1024 * 1024),
+                    content_type=req.headers.get('Content-Type', 'video/mp4'),
+                    headers={'Content-Disposition': 'attachment; filename="bulkdrop_video.mp4"'}
+                )
+            else:
+                # NORMAL MODE: Just return the URL (for IG/YouTube)
+                return jsonify({'url': direct_url})
+                
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-# NEW PROXY ROUTE FOR TIKTOK
-@app.route('/proxy', methods=['GET'])
-def proxy_video():
-    video_url = request.args.get('url')
-    if not video_url:
-        return "No URL provided", 400
-
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://www.tiktok.com/'
-    }
-    
-    try:
-        req = requests.get(video_url, headers=headers, stream=True, timeout=15)
-        return Response(
-            req.iter_content(chunk_size=1024 * 1024),
-            content_type=req.headers.get('Content-Type', 'video/mp4'),
-            headers={'Content-Disposition': 'attachment; filename="bulkdrop_video.mp4"'}
-        )
-    except Exception as e:
-        return str(e), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
