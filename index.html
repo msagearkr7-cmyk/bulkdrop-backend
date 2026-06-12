@@ -127,7 +127,7 @@
       <textarea id="cookiesInput" placeholder="# Netscape HTTP Cookie File..."></textarea>
     </div>
 
-    <textarea id="bulkInput" class="main-input" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;https://youtube.com/shorts/xyz789&#10;One URL per line!"></textarea>
+    <textarea id="bulkInput" class="main-input" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;https://youtube.com/shorts/xyz789&#10;Glued links and messy text are okay!"></textarea>
     
     <button id="formatBtn" onclick="formatUrls()">Format Batch List</button>
     
@@ -177,22 +177,31 @@
   function formatUrls() {
     const rawText = document.getElementById('bulkInput').value;
     
-    const lines = rawText.split('\n')
-                         .map(line => line.trim())
-                         .filter(line => {
-                           return line.startsWith('http') && 
-                                  (line.includes('instagram.com') || 
-                                   line.includes('tiktok.com') || 
-                                   line.includes('youtube.com') || 
-                                   line.includes('youtu.be'));
-                         });
+    // 1. Force a space before every "http" just in case links are glued together without spaces
+    const spacedText = rawText.replace(/(https?:\/\/)/gi, ' $1');
+    
+    // 2. Extract anything that looks like a URL (stops at spaces or commas)
+    const urlRegex = /(https?:\/\/[^\s,]+)/g;
+    const allUrls = spacedText.match(urlRegex) || [];
+    
+    // 3. Filter to ensure it's only our 3 target platforms
+    const validUrls = allUrls.filter(url => {
+      const lower = url.toLowerCase();
+      return lower.includes('instagram.com') || 
+             lower.includes('tiktok.com') || 
+             lower.includes('youtube.com') || 
+             lower.includes('youtu.be');
+    });
 
-    if (lines.length === 0) {
+    // 4. Remove any duplicate links just to be safe
+    const uniqueUrls = [...new Set(validUrls)];
+
+    if (uniqueUrls.length === 0) {
       setStatus("No valid IG, TikTok, or YouTube URLs found.", "error");
       return;
     }
 
-    pendingUrls = lines.map((url, index) => {
+    pendingUrls = uniqueUrls.map((url, index) => {
       const platform = detectPlatform(url);
       return {
         id: `item-${index}`,
