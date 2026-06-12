@@ -85,6 +85,7 @@
   .bg-ig { background: rgba(225, 48, 108, 0.2); color: #ff307b; }
   .bg-tt { background: rgba(255, 255, 255, 0.1); color: #fff; }
   .bg-yt { background: rgba(255, 0, 0, 0.15); color: #ff3b30; }
+  .bg-fb { background: rgba(24, 119, 242, 0.2); color: #1877f2; }
 
   .item-url { color: #f5f5f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; font-family: ui-monospace, monospace; font-size: 12px; opacity: 0.8;}
   .item-status { font-size: 11px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); white-space: nowrap; font-weight: 600; }
@@ -127,6 +128,11 @@
         <label>TikTok Cookies</label>
         <textarea id="cookiesTt" placeholder="# Netscape HTTP Cookie File..."></textarea>
       </div>
+
+      <div class="cookie-group">
+        <label>Facebook Cookies</label>
+        <textarea id="cookiesFb" placeholder="# Netscape HTTP Cookie File..."></textarea>
+      </div>
       
       <div class="cookie-group">
         <label>YouTube Cookies</label>
@@ -134,7 +140,7 @@
       </div>
     </div>
 
-    <textarea id="bulkInput" class="main-input" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;https://youtube.com/shorts/xyz789&#10;Glued links and messy text are okay!"></textarea>
+    <textarea id="bulkInput" class="main-input" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;https://www.facebook.com/watch/?v=123&#10;Glued links and messy text are okay!"></textarea>
     
     <button id="formatBtn" onclick="formatUrls()">Format Batch List</button>
     
@@ -158,6 +164,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
     document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
+    document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
     document.getElementById("cookiesYt").value = localStorage.getItem("yt_cookies") || "";
   });
 
@@ -169,6 +176,7 @@
   function saveCookies() {
     localStorage.setItem("ig_cookies", document.getElementById("cookiesIg").value.trim());
     localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
+    localStorage.setItem("fb_cookies", document.getElementById("cookiesFb").value.trim());
     localStorage.setItem("yt_cookies", document.getElementById("cookiesYt").value.trim());
     
     setStatus("Cookies cached securely in browser.", "success");
@@ -178,6 +186,7 @@
   function detectPlatform(url) {
     if (url.includes('instagram.com')) return { name: 'Instagram', class: 'bg-ig' };
     if (url.includes('tiktok.com')) return { name: 'TikTok', class: 'bg-tt' };
+    if (url.includes('facebook.com') || url.includes('fb.watch')) return { name: 'Facebook', class: 'bg-fb' };
     if (url.includes('youtube.com') || url.includes('youtu.be')) return { name: 'YouTube', class: 'bg-yt' };
     return null; 
   }
@@ -193,6 +202,8 @@
       const lower = url.toLowerCase();
       return lower.includes('instagram.com') || 
              lower.includes('tiktok.com') || 
+             lower.includes('facebook.com') || 
+             lower.includes('fb.watch') || 
              lower.includes('youtube.com') || 
              lower.includes('youtu.be');
     });
@@ -200,7 +211,7 @@
     const uniqueUrls = [...new Set(validUrls)];
 
     if (uniqueUrls.length === 0) {
-      setStatus("No valid IG, TikTok, or YouTube URLs found.", "error");
+      setStatus("No valid IG, TikTok, FB, or YouTube URLs found.", "error");
       return;
     }
 
@@ -259,17 +270,19 @@
         targetCookies = localStorage.getItem("ig_cookies") || "";
     } else if (item.platform.name === 'TikTok') {
         targetCookies = localStorage.getItem("tt_cookies") || "";
+    } else if (item.platform.name === 'Facebook') {
+        targetCookies = localStorage.getItem("fb_cookies") || "";
     } else if (item.platform.name === 'YouTube') {
         targetCookies = localStorage.getItem("yt_cookies") || "";
     }
 
-    const isTikTok = item.platform.name === 'TikTok';
+    const isProxyPlatform = item.platform.name === 'TikTok' || item.platform.name === 'Facebook';
     
     try {
       const res = await fetch(`${BACKEND}/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: item.url, cookies: targetCookies, proxy: isTikTok })
+        body: JSON.stringify({ url: item.url, cookies: targetCookies, proxy: isProxyPlatform })
       });
       
       if (!res.ok) {
@@ -277,15 +290,15 @@
         return false;
       }
 
-      if (isTikTok) {
-        // TIKTOK MODE: Read the raw binary stream directly into memory
+      if (isProxyPlatform) {
+        // TIKTOK & FACEBOOK MODE: Read the raw binary stream directly into memory
         const blob = await res.blob();
         
         // Create an invisible link to force the phone to save the file
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
-        a.download = `tiktok_${item.id}.mp4`;
+        a.download = `${item.platform.name.toLowerCase()}_${item.id}.mp4`;
         document.body.appendChild(a);
         a.click();
         
@@ -351,3 +364,4 @@
 </script>
 </body>
 </html>
+
