@@ -3,27 +3,38 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BulkDrop - Free yt-dlp Edition</title>
+<title>BulkDrop - Dynamic Settings Edition</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0a0a; color: #e8e8e8; font-family: 'SF Mono', monospace; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px; }
-  .logo { font-size: 11px; letter-spacing: 0.3em; color: #444; text-transform: uppercase; margin-bottom: 48px; text-align: center; }
+  .logo { font-size: 11px; letter-spacing: 0.3em; color: #444; text-transform: uppercase; margin-bottom: 32px; text-align: center; }
   .logo span { color: #fff; font-size: 22px; display: block; letter-spacing: 0.15em; margin-bottom: 4px; }
   .box { width: 100%; max-width: 520px; }
+  
+  /* Settings Panel UI */
+  .settings-toggle { font-size: 11px; color: #666; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; text-align: right; margin-bottom: 12px; transition: color 0.2s; }
+  .settings-toggle:hover { color: #fff; }
+  .settings-panel { display: none; background: #111; border: 1px solid #222; border-radius: 4px; padding: 14px; margin-bottom: 16px; }
+  .settings-panel textarea { width: 100%; height: 120px; background: #050505; border: 1px solid #222; color: #aaa; font-family: monospace; font-size: 11px; padding: 8px; resize: vertical; margin-top: 8px; outline: none; border-radius: 4px; }
+  .settings-panel textarea:focus { border-color: #444; }
+  
   input { width: 100%; background: #111; border: 1px solid #222; color: #e8e8e8; padding: 12px 16px; font-size: 14px; border-radius: 4px; outline: none; }
-  input:focus { border-color: #555; }
-  button { background: #e8e8e8; color: #0a0a0a; border: none; padding: 12px 20px; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 4px; transition: opacity 0.2s; }
+  input:focus { border-color: #444; }
+  button { background: #e8e8e8; color: #0a0a0a; border: none; padding: 12px 20px; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 4px; }
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
+  
   .status { font-size: 12px; color: #444; min-height: 20px; margin-top: 14px; }
   .status.active { color: #888; }
   .status.error { color: #e05555; }
   .status.success { color: #55e08a; }
+  
   .input-row, .controls-row, .action-row { display: flex; gap: 8px; margin-bottom: 12px; }
   .input-row input { flex: 1; }
   .controls-row input[type="number"] { width: 70px; text-align: center; padding: 8px; }
   .controls-row label { font-size: 11px; color: #444; text-transform: uppercase; display: flex; align-items: center; }
-  .user-list { display: flex; flex-direction: column; gap: 6px; max-height: 380px; overflow-y: auto; margin-top: 10px; }
+  
+  .user-list { display: flex; flex-direction: column; gap: 6px; max-height: 350px; overflow-y: auto; margin-top: 10px; }
   .user-item { background: #111; border: 1px solid #1a1a1a; border-radius: 4px; padding: 10px; display: flex; align-items: center; gap: 10px; }
   .avatar { width: 40px; height: 40px; border-radius: 4px; background: #1a1a1a; object-fit: cover; }
   .info { flex: 1; overflow: hidden; font-size: 12px; }
@@ -38,6 +49,16 @@
 <div class="logo"><span>BULKDROP</span>yt-dlp edition</div>
 
 <div class="box">
+  <div class="settings-toggle" onclick="toggleSettings()">⚙️ Settings Panel</div>
+  
+  <div class="settings-panel" id="settingsPanel">
+    <div style="font-size: 11px; color: #888; justify-content: space-between; display: flex;">
+      <span>PASTE COOKIES.TXT TEXT HERE:</span>
+      <span style="color: #55e08a; cursor:pointer;" onclick="saveCookies()">[SAVE]</span>
+    </div>
+    <textarea id="cookiesInput" placeholder="# Netscape HTTP Cookie File... Paste complete contents here."></textarea>
+  </div>
+
   <div class="input-row">
     <input type="text" id="username" placeholder="@username or instagram.com/user" />
     <button id="fetchBtn" onclick="fetchReels()">FETCH</button>
@@ -46,7 +67,7 @@
     <label>Count:</label>
     <input type="number" id="amount" value="12" min="1" max="200" />
   </div>
-  <div class="status" id="fetchStatus">Enter username to start</div>
+  <div class="status" id="fetchStatus">Enter target profile details</div>
 
   <div class="user-list" id="userList"></div>
 
@@ -57,9 +78,29 @@
 </div>
 
 <script>
-  // Ensure this matches your cloud hosting address
+  // Swap this with your actual live Render endpoint
   const BACKEND = 'https://bulkdrop-backend.onrender.com'; 
   let allUsers = [];
+
+  // Load existing cookies configuration from localStorage on startup
+  document.addEventListener("DOMContentLoaded", () => {
+    const savedCookies = localStorage.getItem("ig_cookies");
+    if (savedCookies) {
+      document.getElementById("cookiesInput").value = savedCookies;
+    }
+  });
+
+  function toggleSettings() {
+    const panel = document.getElementById("settingsPanel");
+    panel.style.display = panel.style.display === "block" ? "none" : "block";
+  }
+
+  function saveCookies() {
+    const txt = document.getElementById("cookiesInput").value.trim();
+    localStorage.setItem("ig_cookies", txt);
+    setStatus("Cookies cached locally in application workspace.", "success");
+    toggleSettings();
+  }
 
   async function fetchReels() {
     const raw = document.getElementById('username').value.trim();
@@ -69,36 +110,37 @@
     document.getElementById('userList').innerHTML = '';
     document.getElementById('actionRow').style.display = 'none';
     const amount = parseInt(document.getElementById('amount').value) || 12;
+    const cookies = localStorage.getItem("ig_cookies") || "";
 
-    setStatus(`Scraping profiles via cloud instance...`, 'active');
+    setStatus(`Interrogating Instagram profile structures...`, 'active');
     document.getElementById('fetchBtn').disabled = true;
 
     try {
       const res = await fetch(`${BACKEND}/reels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: raw, amount })
+        body: JSON.stringify({ username: raw, amount, cookies })
       });
       const data = await res.json();
 
       if (!res.ok) {
-        setStatus(data.error || 'Failed to fetch profile structural data.', 'error');
+        setStatus(data.error || 'Failed to read data.', 'error');
         document.getElementById('fetchBtn').disabled = false;
         return;
       }
 
       allUsers = data.reels || [];
       if (!allUsers.length) {
-        setStatus(`Profile data structured but zero media items identified.`, 'error');
+        setStatus(`No accessible items found on target profile structure.`, 'error');
         document.getElementById('fetchBtn').disabled = false;
         return;
       }
 
-      setStatus(`Successfully pulled metadata tracking records for ${allUsers.length} entries.`, 'success');
+      setStatus(`Fetched mapping profiles for ${allUsers.length} files.`, 'success');
       renderUsers(allUsers);
       document.getElementById('actionRow').style.display = 'flex';
     } catch (e) {
-      setStatus('Network timeout connecting with background container.', 'error');
+      setStatus('Target container dropped session handshake.', 'error');
     }
     document.getElementById('fetchBtn').disabled = false;
   }
@@ -111,9 +153,9 @@
       item.innerHTML = `
         <img class="avatar" src="${r.thumbnail}" onerror="this.src=''" />
         <div class="info">
-          <div class="uname">${r.id || 'Video ID Record'}</div>
+          <div class="uname">${r.id || 'Media File'}</div>
           <div class="fname">${r.caption}</div>
-          <div style="font-size: 10px; color:#555; margin-top:4px;">Plays registered: ${r.play_count}</div>
+          <div style="font-size: 10px; color:#555; margin-top:4px;">Metrics: ${r.play_count} views</div>
         </div>
         <button class="btn-outline" style="padding:6px 12px; font-size:10px;" onclick="extractAndDownload('${r.url}')">DOWNLOAD</button>
       `;
@@ -122,44 +164,46 @@
   }
 
   async function extractAndDownload(igUrl) {
-    setStatus('Resolving video stream assets...', 'active');
+    setStatus('Resolving media wrapper link parameters...', 'active');
+    const cookies = localStorage.getItem("ig_cookies") || "";
+    
     try {
       const res = await fetch(`${BACKEND}/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: igUrl })
+        body: JSON.stringify({ url: igUrl, cookies })
       });
       const data = await res.json();
       
       if (res.ok && data.url) {
-        setStatus('Media pipeline ready.', 'success');
+        setStatus('Media streaming pipeline clear.', 'success');
         window.open(data.url + '&dl=1', '_blank');
       } else {
-        setStatus(data.error || 'Unable to resolve raw stream endpoint.', 'error');
+        setStatus(data.error || 'Failed to isolate clear source stream.', 'error');
       }
     } catch (err) {
-      setStatus('Network disruption occurred across system endpoints.', 'error');
+      setStatus('Internal transaction pathway failure.', 'error');
     }
   }
 
   async function downloadAll() {
-    alert("CRITICAL REQUIREMENT: Enable pop-up exceptions for this tab in your browser navigation settings!");
+    alert("ATTENTION: Please enable and approve multi-window popup configurations for this address!");
     document.getElementById('downloadAllBtn').disabled = true;
 
     for (let i = 0; i < allUsers.length; i++) {
       if (!allUsers[i].url) continue;
-      setStatus(`Processing pipeline download ${i + 1}/${allUsers.length}...`, 'active');
+      setStatus(`Processing data sequence downstream ${i + 1}/${allUsers.length}...`, 'active');
       await extractAndDownload(allUsers[i].url);
       await new Promise(r => setTimeout(r, 2000)); 
     }
-    setStatus('Batch download sequencing execution complete.', 'success');
+    setStatus('Batch downloading job runs completed successfully.', 'success');
     document.getElementById('downloadAllBtn').disabled = false;
   }
 
   function copyUrls() {
     const urls = allUsers.map(r => r.url).filter(Boolean).join('\n');
     navigator.clipboard.writeText(urls);
-    setStatus(`Copied ${allUsers.length} direct target references.`, 'success');
+    setStatus(`Copied ${allUsers.length} raw URLs to operational paste buffer.`, 'success');
   }
 
   function setStatus(msg, type = '') {
