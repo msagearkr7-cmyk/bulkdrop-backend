@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BulkDrop - Dynamic Settings Edition</title>
+<title>BulkDrop - Direct Batch Edition</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0a0a; color: #e8e8e8; font-family: 'SF Mono', monospace; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px; }
   .logo { font-size: 11px; letter-spacing: 0.3em; color: #444; text-transform: uppercase; margin-bottom: 32px; text-align: center; }
   .logo span { color: #fff; font-size: 22px; display: block; letter-spacing: 0.15em; margin-bottom: 4px; }
-  .box { width: 100%; max-width: 520px; }
+  .box { width: 100%; max-width: 600px; }
   
   /* Settings Panel UI */
   .settings-toggle { font-size: 11px; color: #666; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; text-align: right; margin-bottom: 12px; transition: color 0.2s; }
@@ -18,69 +18,76 @@
   .settings-panel textarea { width: 100%; height: 120px; background: #050505; border: 1px solid #222; color: #aaa; font-family: monospace; font-size: 11px; padding: 8px; resize: vertical; margin-top: 8px; outline: none; border-radius: 4px; }
   .settings-panel textarea:focus { border-color: #444; }
   
-  input { width: 100%; background: #111; border: 1px solid #222; color: #e8e8e8; padding: 12px 16px; font-size: 14px; border-radius: 4px; outline: none; }
-  input:focus { border-color: #444; }
-  button { background: #e8e8e8; color: #0a0a0a; border: none; padding: 12px 20px; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 4px; }
+  /* Main Input Area */
+  .main-input { width: 100%; height: 150px; background: #111; border: 1px solid #222; color: #e8e8e8; padding: 12px 16px; font-family: inherit; font-size: 13px; border-radius: 4px; outline: none; resize: vertical; margin-bottom: 12px; white-space: pre; overflow-wrap: normal; overflow-x: auto;}
+  .main-input:focus { border-color: #444; }
+  
+  button { background: #e8e8e8; color: #0a0a0a; border: none; padding: 12px 20px; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 4px; transition: opacity 0.2s; width: 100%; }
   button:hover { opacity: 0.85; }
   button:disabled { opacity: 0.3; cursor: not-allowed; }
   
-  .status { font-size: 12px; color: #444; min-height: 20px; margin-top: 14px; }
+  .status { font-size: 12px; color: #444; min-height: 20px; margin-top: 14px; text-align: center; }
   .status.active { color: #888; }
   .status.error { color: #e05555; }
   .status.success { color: #55e08a; }
   
-  .input-row, .controls-row, .action-row { display: flex; gap: 8px; margin-bottom: 12px; }
-  .input-row input { flex: 1; }
-  .controls-row input[type="number"] { width: 70px; text-align: center; padding: 8px; }
-  .controls-row label { font-size: 11px; color: #444; text-transform: uppercase; display: flex; align-items: center; }
+  .action-row { display: flex; gap: 8px; margin-top: 12px; }
+  .action-row button { flex: 1; }
   
-  .user-list { display: flex; flex-direction: column; gap: 6px; max-height: 350px; overflow-y: auto; margin-top: 10px; }
-  .user-item { background: #111; border: 1px solid #1a1a1a; border-radius: 4px; padding: 10px; display: flex; align-items: center; gap: 10px; }
-  .avatar { width: 40px; height: 40px; border-radius: 4px; background: #1a1a1a; object-fit: cover; }
-  .info { flex: 1; overflow: hidden; font-size: 12px; }
-  .uname { color: #e8e8e8; font-weight: 700; white-space: nowrap; }
-  .fname { color: #555; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .btn-outline { background: transparent; color: #888; border: 1px solid #222; }
-  .btn-accent { background: #55e08a; color: #0a0a0a; flex: 1;}
+  /* Formatted List UI */
+  .list-header { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 24px; margin-bottom: 8px; display: none; justify-content: space-between;}
+  .user-list { display: flex; flex-direction: column; gap: 6px; max-height: 400px; overflow-y: auto; }
+  .user-item { background: #111; border: 1px solid #1a1a1a; border-radius: 4px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+  .item-url { color: #e8e8e8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .item-status { font-size: 10px; padding: 4px 8px; border-radius: 3px; background: #1a1a1a; color: #888; white-space: nowrap; font-weight: bold; }
+  
+  .status-ready { color: #888; }
+  .status-working { color: #55aae0; background: #1a2d3d; }
+  .status-done { color: #55e08a; background: #143320; }
+  .status-failed { color: #e05555; background: #3d1a1a; }
+
+  .btn-accent { background: #55e08a; color: #0a0a0a; }
+  
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 </style>
 </head>
 <body>
 
-<div class="logo"><span>BULKDROP</span>yt-dlp edition</div>
+<div class="logo"><span>BULKDROP</span>batch url processor</div>
 
 <div class="box">
-  <div class="settings-toggle" onclick="toggleSettings()">⚙️ Settings Panel</div>
+  <div class="settings-toggle" onclick="toggleSettings()">⚙️ Cookies Setup</div>
   
   <div class="settings-panel" id="settingsPanel">
     <div style="font-size: 11px; color: #888; justify-content: space-between; display: flex;">
-      <span>PASTE COOKIES.TXT TEXT HERE:</span>
+      <span>PASTE INSTAGRAM COOKIES.TXT HERE:</span>
       <span style="color: #55e08a; cursor:pointer;" onclick="saveCookies()">[SAVE]</span>
     </div>
-    <textarea id="cookiesInput" placeholder="# Netscape HTTP Cookie File... Paste complete contents here."></textarea>
+    <textarea id="cookiesInput" placeholder="# Netscape HTTP Cookie File..."></textarea>
   </div>
 
-  <div class="input-row">
-    <input type="text" id="username" placeholder="@username or instagram.com/user" />
-    <button id="fetchBtn" onclick="fetchReels()">FETCH</button>
-  </div>
-  <div class="controls-row">
-    <label>Count:</label>
-    <input type="number" id="amount" value="12" min="1" max="200" />
-  </div>
-  <div class="status" id="fetchStatus">Enter target profile details</div>
+  <textarea id="bulkInput" class="main-input" placeholder="Paste Instagram Reel URLs here...&#10;https://www.instagram.com/reel/shortcode1/&#10;https://www.instagram.com/reel/shortcode2/&#10;One URL per line!"></textarea>
+  
+  <button id="formatBtn" onclick="formatUrls()">FORMAT LIST</button>
+  
+  <div class="status" id="mainStatus">Waiting for input...</div>
 
-  <div class="user-list" id="userList"></div>
+  <div class="list-header" id="listHeader">
+    <span id="listCount">0 Videos Found</span>
+  </div>
+  <div class="user-list" id="urlList"></div>
 
-  <div class="action-row" id="actionRow" style="display:none; margin-top:15px;">
-    <button class="btn-outline" onclick="copyUrls()">COPY URLS</button>
-    <button class="btn-accent" id="downloadAllBtn" onclick="downloadAll()">DOWNLOAD ALL</button>
+  <div class="action-row" id="actionRow" style="display:none;">
+    <button class="btn-accent" id="downloadAllBtn" onclick="downloadAll()">DOWNLOAD ALL (2s Delay)</button>
   </div>
 </div>
 
 <script>
-  // Swap this with your actual live Render endpoint
+  // Ensure this matches your cloud hosting address
   const BACKEND = 'https://bulkdrop-backend.onrender.com'; 
-  let allUsers = [];
+  let pendingUrls = [];
 
   // Load existing cookies configuration from localStorage on startup
   document.addEventListener("DOMContentLoaded", () => {
@@ -98,116 +105,124 @@
   function saveCookies() {
     const txt = document.getElementById("cookiesInput").value.trim();
     localStorage.setItem("ig_cookies", txt);
-    setStatus("Cookies cached locally in application workspace.", "success");
+    setStatus("Cookies cached locally.", "success");
     toggleSettings();
   }
 
-  async function fetchReels() {
-    const raw = document.getElementById('username').value.trim();
-    if (!raw) return;
+  function formatUrls() {
+    const rawText = document.getElementById('bulkInput').value;
+    // Split by new line, trim whitespace, and filter out empty lines or obvious non-links
+    const lines = rawText.split('\n')
+                         .map(line => line.trim())
+                         .filter(line => line.includes('instagram.com'));
 
-    allUsers = [];
-    document.getElementById('userList').innerHTML = '';
-    document.getElementById('actionRow').style.display = 'none';
-    const amount = parseInt(document.getElementById('amount').value) || 12;
-    const cookies = localStorage.getItem("ig_cookies") || "";
-
-    setStatus(`Interrogating Instagram profile structures...`, 'active');
-    document.getElementById('fetchBtn').disabled = true;
-
-    try {
-      const res = await fetch(`${BACKEND}/reels`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: raw, amount, cookies })
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setStatus(data.error || 'Failed to read data.', 'error');
-        document.getElementById('fetchBtn').disabled = false;
-        return;
-      }
-
-      allUsers = data.reels || [];
-      if (!allUsers.length) {
-        setStatus(`No accessible items found on target profile structure.`, 'error');
-        document.getElementById('fetchBtn').disabled = false;
-        return;
-      }
-
-      setStatus(`Fetched mapping profiles for ${allUsers.length} files.`, 'success');
-      renderUsers(allUsers);
-      document.getElementById('actionRow').style.display = 'flex';
-    } catch (e) {
-      setStatus('Target container dropped session handshake.', 'error');
+    if (lines.length === 0) {
+      setStatus("No valid Instagram URLs found in the text box.", "error");
+      return;
     }
-    document.getElementById('fetchBtn').disabled = false;
+
+    pendingUrls = lines.map((url, index) => ({
+      id: `item-${index}`,
+      url: url,
+      status: 'Ready',
+      cssClass: 'status-ready'
+    }));
+
+    renderList();
+    
+    document.getElementById('listHeader').style.display = 'flex';
+    document.getElementById('listCount').innerText = `${pendingUrls.length} Videos Formatted`;
+    document.getElementById('actionRow').style.display = 'flex';
+    setStatus("List formatted and ready for batch download.", "success");
   }
 
-  function renderUsers(reels) {
-    const list = document.getElementById('userList');
-    reels.forEach(r => {
-      const item = document.createElement('div');
-      item.className = 'user-item';
-      item.innerHTML = `
-        <img class="avatar" src="${r.thumbnail}" onerror="this.src=''" />
-        <div class="info">
-          <div class="uname">${r.id || 'Media File'}</div>
-          <div class="fname">${r.caption}</div>
-          <div style="font-size: 10px; color:#555; margin-top:4px;">Metrics: ${r.play_count} views</div>
-        </div>
-        <button class="btn-outline" style="padding:6px 12px; font-size:10px;" onclick="extractAndDownload('${r.url}')">DOWNLOAD</button>
+  function renderList() {
+    const listDiv = document.getElementById('urlList');
+    listDiv.innerHTML = '';
+
+    pendingUrls.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'user-item';
+      row.id = item.id;
+      
+      // Clean up the URL for display purposes (removes https://www.instagram.com/)
+      const displayUrl = item.url.replace(/^https?:\/\/(www\.)?instagram\.com\//, '');
+
+      row.innerHTML = `
+        <div class="item-url" title="${item.url}">${displayUrl}</div>
+        <div class="item-status ${item.cssClass}" id="status-${item.id}">${item.status}</div>
       `;
-      list.appendChild(item);
+      listDiv.appendChild(row);
     });
   }
 
-  async function extractAndDownload(igUrl) {
-    setStatus('Resolving media wrapper link parameters...', 'active');
+  function updateItemStatus(id, text, cssClass) {
+    const badge = document.getElementById(`status-${id}`);
+    if (badge) {
+      badge.textContent = text;
+      badge.className = `item-status ${cssClass}`;
+    }
+  }
+
+  async function resolveAndDownload(item) {
+    updateItemStatus(item.id, 'Extracting...', 'status-working');
     const cookies = localStorage.getItem("ig_cookies") || "";
     
     try {
       const res = await fetch(`${BACKEND}/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: igUrl, cookies })
+        body: JSON.stringify({ url: item.url, cookies })
       });
       const data = await res.json();
       
       if (res.ok && data.url) {
-        setStatus('Media streaming pipeline clear.', 'success');
+        updateItemStatus(item.id, 'Done', 'status-done');
         window.open(data.url + '&dl=1', '_blank');
+        return true;
       } else {
-        setStatus(data.error || 'Failed to isolate clear source stream.', 'error');
+        updateItemStatus(item.id, 'Failed', 'status-failed');
+        console.error(data.error);
+        return false;
       }
     } catch (err) {
-      setStatus('Internal transaction pathway failure.', 'error');
+      updateItemStatus(item.id, 'Error', 'status-failed');
+      return false;
     }
   }
 
   async function downloadAll() {
-    alert("ATTENTION: Please enable and approve multi-window popup configurations for this address!");
-    document.getElementById('downloadAllBtn').disabled = true;
+    alert("CRITICAL REQUIREMENT: Make sure your browser allows pop-ups for this site, or only the first video will download!");
+    
+    const btn = document.getElementById('downloadAllBtn');
+    btn.disabled = true;
+    
+    setStatus("Processing batch download queue...", "active");
 
-    for (let i = 0; i < allUsers.length; i++) {
-      if (!allUsers[i].url) continue;
-      setStatus(`Processing data sequence downstream ${i + 1}/${allUsers.length}...`, 'active');
-      await extractAndDownload(allUsers[i].url);
-      await new Promise(r => setTimeout(r, 2000)); 
+    for (let i = 0; i < pendingUrls.length; i++) {
+      const item = pendingUrls[i];
+      
+      // Scroll the list down automatically so you can watch the progress
+      const rowElement = document.getElementById(item.id);
+      if (rowElement) {
+        rowElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      await resolveAndDownload(item);
+      
+      // Strict 2-second delay between requests
+      if (i < pendingUrls.length - 1) {
+        setStatus(`Waiting 2 seconds... (${i + 1}/${pendingUrls.length} complete)`, "active");
+        await new Promise(r => setTimeout(r, 2000)); 
+      }
     }
-    setStatus('Batch downloading job runs completed successfully.', 'success');
-    document.getElementById('downloadAllBtn').disabled = false;
-  }
-
-  function copyUrls() {
-    const urls = allUsers.map(r => r.url).filter(Boolean).join('\n');
-    navigator.clipboard.writeText(urls);
-    setStatus(`Copied ${allUsers.length} raw URLs to operational paste buffer.`, 'success');
+    
+    setStatus('Batch download sequence finished!', 'success');
+    btn.disabled = false;
   }
 
   function setStatus(msg, type = '') {
-    const el = document.getElementById('fetchStatus');
+    const el = document.getElementById('mainStatus');
     el.textContent = msg;
     el.className = 'status ' + type;
   }
