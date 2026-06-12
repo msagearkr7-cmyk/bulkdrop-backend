@@ -7,7 +7,6 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   
-  /* Modern macOS Dark Mode Background with Ambient Light Orbs */
   body { 
     background-color: #000; 
     color: #f5f5f7; 
@@ -21,7 +20,6 @@
     overflow-x: hidden;
   }
 
-  /* Background Ambient Colors to make the glass pop */
   body::before, body::after {
     content: '';
     position: fixed;
@@ -40,7 +38,6 @@
   
   .box { width: 100%; max-width: 650px; }
   
-  /* Glassmorphism Panel */
   .glass-panel {
     background: rgba(30, 30, 35, 0.4);
     -webkit-backdrop-filter: blur(24px);
@@ -51,25 +48,25 @@
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
-  /* Settings Panel UI */
   .settings-toggle { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.5); cursor: pointer; text-align: right; margin-bottom: 16px; transition: color 0.2s; display: flex; justify-content: flex-end; align-items: center; gap: 6px;}
   .settings-toggle:hover { color: #fff; }
   .settings-panel { display: none; background: rgba(0,0,0,0.3); border-radius: 16px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); }
-  .settings-panel textarea { width: 100%; height: 100px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); color: #a1a1a6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 12px; resize: vertical; margin-top: 8px; outline: none; border-radius: 12px; transition: border 0.2s;}
+  
+  .cookie-group { margin-bottom: 12px; }
+  .cookie-group label { display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .settings-panel textarea { width: 100%; height: 70px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); color: #a1a1a6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 12px; resize: vertical; outline: none; border-radius: 12px; transition: border 0.2s;}
   .settings-panel textarea:focus { border-color: rgba(255,255,255,0.3); }
   
-  /* Main Input Area */
   .main-input { width: 100%; height: 160px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.1); color: #f5f5f7; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; border-radius: 16px; outline: none; resize: vertical; margin-bottom: 16px; transition: all 0.2s; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);}
   .main-input:focus { border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); box-shadow: 0 0 0 4px rgba(255,255,255,0.05); }
   .main-input::placeholder { color: rgba(255,255,255,0.3); }
 
-  /* Apple Style Buttons */
   button { background: #fff; color: #000; border: none; padding: 14px 24px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 14px; transition: all 0.2s; width: 100%; font-family: inherit;}
   button:hover { transform: scale(0.98); opacity: 0.9; }
   button:active { transform: scale(0.96); }
   button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
   
-  .btn-accent { background: #0a84ff; color: #fff; } /* macOS Blue */
+  .btn-accent { background: #0a84ff; color: #fff; } 
   .btn-accent:hover { background: #007aff; }
 
   .status { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); min-height: 20px; margin-top: 16px; text-align: center; }
@@ -79,13 +76,11 @@
   
   .action-row { display: flex; gap: 12px; margin-top: 16px; }
   
-  /* Formatted List UI */
   .list-header { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 32px; margin-bottom: 12px; display: none; justify-content: space-between;}
   .user-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 4px;}
   .user-item { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; transition: background 0.2s;}
   .user-item:hover { background: rgba(255, 255, 255, 0.08); }
   
-  /* Platform Badges */
   .plat-badge { font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; flex-shrink: 0;}
   .bg-ig { background: rgba(225, 48, 108, 0.2); color: #ff307b; }
   .bg-tt { background: rgba(255, 255, 255, 0.1); color: #fff; }
@@ -99,7 +94,6 @@
   .status-done { color: #32d74b; background: rgba(50, 215, 75, 0.15); }
   .status-failed { color: #ff453a; background: rgba(255, 69, 58, 0.15); }
 
-  /* Custom Scrollbar */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
@@ -119,12 +113,25 @@
     </div>
     
     <div class="settings-panel" id="settingsPanel">
-      <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); justify-content: space-between; display: flex; margin-bottom: 6px;">
-        <span>Paste Netscape Cookies:</span>
+      <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); justify-content: space-between; display: flex; margin-bottom: 12px;">
+        <span>Platform Cookies Setup:</span>
         <span style="color: #0a84ff; cursor:pointer;" onclick="saveCookies()">Save Settings</span>
       </div>
-      <div style="font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 8px;">Combine IG, TikTok, and YT cookies here.</div>
-      <textarea id="cookiesInput" placeholder="# Netscape HTTP Cookie File..."></textarea>
+      
+      <div class="cookie-group">
+        <label>Instagram Cookies</label>
+        <textarea id="cookiesIg" placeholder="# Netscape HTTP Cookie File..."></textarea>
+      </div>
+      
+      <div class="cookie-group">
+        <label>TikTok Cookies</label>
+        <textarea id="cookiesTt" placeholder="# Netscape HTTP Cookie File..."></textarea>
+      </div>
+      
+      <div class="cookie-group">
+        <label>YouTube Cookies</label>
+        <textarea id="cookiesYt" placeholder="# Netscape HTTP Cookie File..."></textarea>
+      </div>
     </div>
 
     <textarea id="bulkInput" class="main-input" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;https://youtube.com/shorts/xyz789&#10;Glued links and messy text are okay!"></textarea>
@@ -149,10 +156,9 @@
   let pendingUrls = [];
 
   document.addEventListener("DOMContentLoaded", () => {
-    const savedCookies = localStorage.getItem("ig_cookies");
-    if (savedCookies) {
-      document.getElementById("cookiesInput").value = savedCookies;
-    }
+    document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
+    document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
+    document.getElementById("cookiesYt").value = localStorage.getItem("yt_cookies") || "";
   });
 
   function toggleSettings() {
@@ -161,8 +167,10 @@
   }
 
   function saveCookies() {
-    const txt = document.getElementById("cookiesInput").value.trim();
-    localStorage.setItem("ig_cookies", txt);
+    localStorage.setItem("ig_cookies", document.getElementById("cookiesIg").value.trim());
+    localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
+    localStorage.setItem("yt_cookies", document.getElementById("cookiesYt").value.trim());
+    
     setStatus("Cookies cached securely in browser.", "success");
     toggleSettings();
   }
@@ -177,14 +185,10 @@
   function formatUrls() {
     const rawText = document.getElementById('bulkInput').value;
     
-    // 1. Force a space before every "http" just in case links are glued together without spaces
     const spacedText = rawText.replace(/(https?:\/\/)/gi, ' $1');
-    
-    // 2. Extract anything that looks like a URL (stops at spaces or commas)
     const urlRegex = /(https?:\/\/[^\s,]+)/g;
     const allUrls = spacedText.match(urlRegex) || [];
     
-    // 3. Filter to ensure it's only our 3 target platforms
     const validUrls = allUrls.filter(url => {
       const lower = url.toLowerCase();
       return lower.includes('instagram.com') || 
@@ -193,7 +197,6 @@
              lower.includes('youtu.be');
     });
 
-    // 4. Remove any duplicate links just to be safe
     const uniqueUrls = [...new Set(validUrls)];
 
     if (uniqueUrls.length === 0) {
@@ -250,22 +253,37 @@
 
   async function resolveAndDownload(item) {
     updateItemStatus(item.id, 'Extracting', 'status-working');
-    const cookies = localStorage.getItem("ig_cookies") || "";
+    
+    // Dynamically grab the specific cookie based on the platform being processed
+    let targetCookies = "";
+    if (item.platform.name === 'Instagram') {
+        targetCookies = localStorage.getItem("ig_cookies") || "";
+    } else if (item.platform.name === 'TikTok') {
+        targetCookies = localStorage.getItem("tt_cookies") || "";
+    } else if (item.platform.name === 'YouTube') {
+        targetCookies = localStorage.getItem("yt_cookies") || "";
+    }
     
     try {
       const res = await fetch(`${BACKEND}/download`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: item.url, cookies })
+        body: JSON.stringify({ url: item.url, cookies: targetCookies })
       });
       const data = await res.json();
       
       if (res.ok && data.url) {
         updateItemStatus(item.id, 'Completed', 'status-done');
         let dlLink = data.url;
-        if (!dlLink.includes('dl=1') && !dlLink.includes('googlevideo')) {
-            dlLink += (dlLink.includes('?') ? '&dl=1' : '?dl=1');
+        
+        if (item.platform.name === 'TikTok' || dlLink.includes('tiktok') || dlLink.includes('byte')) {
+            dlLink = `${BACKEND}/proxy?url=${encodeURIComponent(dlLink)}`;
+        } else {
+            if (!dlLink.includes('dl=1') && !dlLink.includes('googlevideo')) {
+                dlLink += (dlLink.includes('?') ? '&dl=1' : '?dl=1');
+            }
         }
+        
         window.open(dlLink, '_blank');
         return true;
       } else {
