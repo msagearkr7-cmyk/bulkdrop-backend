@@ -276,6 +276,7 @@
         updateItemStatus(item.id, 'Completed', 'status-done');
         let dlLink = data.url;
         
+        // Push TikToks through the backend proxy
         if (item.platform.name === 'TikTok' || dlLink.includes('tiktok') || dlLink.includes('byte')) {
             dlLink = `${BACKEND}/proxy?url=${encodeURIComponent(dlLink)}`;
         } else {
