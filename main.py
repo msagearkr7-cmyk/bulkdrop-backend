@@ -6,18 +6,34 @@ import os
 app = Flask(__name__)
 CORS(app, origins="*")
 
+def handle_incoming_cookies(cookies_text):
+    """Writes incoming cookies text to a local file for yt-dlp to use."""
+    if cookies_text and cookies_text.strip():
+        with open('cookies.txt', 'w', encoding='utf-8') as f:
+            f.write(cookies_text.strip())
+    elif os.path.exists('cookies.txt'):
+        # If no cookies passed but an old file exists, clear it to prevent auth confusion
+        try:
+            os.remove('cookies.txt')
+        except:
+            pass
+
 @app.route('/')
 def home():
-    return "yt-dlp BulkDrop Backend Running"
+    return "yt-dlp BulkDrop Backend (Dynamic Cookies) Running"
 
 @app.route('/reels', methods=['POST'])
 def reels():
     data = request.json or {}
     raw = data.get('username', '').strip()
+    cookies_text = data.get('cookies', '').strip()
+    
     if not raw:
         return jsonify({'error': 'username required'}), 400
 
-    # Sanitize username
+    # Handle dynamic cookie text assignment
+    handle_incoming_cookies(cookies_text)
+
     username = raw.replace('@', '').strip()
     if 'instagram.com' in username:
         username = username.rstrip('/').split('/')[-1]
@@ -25,7 +41,6 @@ def reels():
     ig_url = f'https://www.instagram.com/{username}/reels/'
     amount = int(data.get('amount', 12))
 
-    # Fast flat extraction setup (fetches overview metadata)
     ydl_opts = {
         'extract_flat': True, 
         'playlist_items': f'1-{amount}',
@@ -42,12 +57,11 @@ def reels():
             info = ydl.extract_info(ig_url, download=False)
             
             if not info or 'entries' not in info:
-                return jsonify({'error': 'Instagram blocked the request. Please verify or update your cookies.txt file on the server.'}), 403
+                return jsonify({'error': 'Instagram blocked the request. Please update your cookies in the application settings.'}), 403
 
             items = []
             for entry in info['entries']:
-                if not entry: 
-                    continue
+                if not entry: continue
                 
                 thumb = ''
                 if entry.get('thumbnails'):
@@ -75,10 +89,13 @@ def reels():
 def download():
     data = request.json or {}
     url = data.get('url')
+    cookies_text = data.get('cookies', '').strip()
+    
     if not url:
         return jsonify({'error': 'URL required'}), 400
 
-    # Deep extraction setup to fetch direct MP4 stream endpoints
+    handle_incoming_cookies(cookies_text)
+
     ydl_opts = {
         'format': 'best',
         'quiet': True,
