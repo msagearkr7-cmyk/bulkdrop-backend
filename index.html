@@ -121,16 +121,17 @@
 
 <div class="logo"><span>BulkDrop Pro</span>Multi-Platform Engine</div>
 
+<!-- Nav tabs now use direct IDs without inline onclicks -->
 <div class="nav-tabs">
-  <div class="nav-tab active" onclick="switchTab('downloader')" id="tab-downloader">Batch Downloader</div>
-  <div class="nav-tab" onclick="switchTab('niche')" id="tab-niche">Niche Finder Intelligence</div>
+  <div class="nav-tab active" id="tab-downloader">Batch Downloader</div>
+  <div class="nav-tab" id="tab-niche">Niche Finder Intelligence</div>
 </div>
 
 <div class="box">
   
   <!-- VIEW 1: DOWNLOADER -->
   <div class="glass-panel" id="view-downloader">
-    <div class="settings-toggle" onclick="toggleSettings()">
+    <div class="settings-toggle" id="btn-toggle-settings">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       Authentication Setup
     </div>
@@ -138,7 +139,7 @@
     <div class="settings-panel" id="settingsPanel">
       <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); justify-content: space-between; display: flex; margin-bottom: 12px;">
         <span>Platform Cookies Setup:</span>
-        <span style="color: #0a84ff; cursor:pointer;" onclick="saveCookies()">Save Settings</span>
+        <span style="color: #0a84ff; cursor:pointer;" id="btn-save-cookies">Save Settings</span>
       </div>
       <div class="input-group"><label>Instagram Cookies</label><textarea id="cookiesIg" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
       <div class="input-group"><label>TikTok Cookies</label><textarea id="cookiesTt" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
@@ -147,14 +148,14 @@
     </div>
 
     <textarea id="bulkInput" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;Glued links and messy text are okay!"></textarea>
-    <button id="formatBtn" onclick="formatUrls()">Format Batch List</button>
+    <button id="formatBtn">Format Batch List</button>
     <div class="status" id="dlStatus">Ready to process links.</div>
 
     <div class="list-header" id="dlListHeader"><span id="dlListCount">0 Videos Found</span></div>
     <div class="data-list" id="urlList"></div>
 
     <div style="display:flex; gap:12px; margin-top:16px;">
-      <button class="btn-accent" id="downloadAllBtn" onclick="downloadAll()" style="display:none;">Start Batch Download</button>
+      <button class="btn-accent" id="downloadAllBtn" style="display:none;">Start Batch Download</button>
     </div>
   </div>
 
@@ -189,7 +190,7 @@
       </div>
     </div>
 
-    <button id="searchNicheBtn" onclick="searchNiche()">Find Exploding Content</button>
+    <button id="searchNicheBtn">Find Exploding Content</button>
     <div class="status" id="nicheStatus">Ready to analyze market.</div>
 
     <div class="list-header" id="nicheListHeader"><span id="nicheListCount">Results</span></div>
@@ -216,6 +217,18 @@
   let pendingUrls = [];
 
   document.addEventListener("DOMContentLoaded", () => {
+    // Bind Tab Clicks natively
+    document.getElementById("tab-downloader").addEventListener("click", () => switchTab('downloader'));
+    document.getElementById("tab-niche").addEventListener("click", () => switchTab('niche'));
+    
+    // Bind Button Clicks natively
+    document.getElementById("btn-toggle-settings").addEventListener("click", toggleSettings);
+    document.getElementById("btn-save-cookies").addEventListener("click", saveCookies);
+    document.getElementById("formatBtn").addEventListener("click", formatUrls);
+    document.getElementById("downloadAllBtn").addEventListener("click", downloadAll);
+    document.getElementById("searchNicheBtn").addEventListener("click", searchNiche);
+
+    // Load Local Storage Data
     document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
     document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
     document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
@@ -375,6 +388,16 @@
     return num;
   }
 
+  // Make this function global so the inline onclick inside the generated results still works
+  window.sendToDownloader = function(url) {
+    switchTab('downloader');
+    const input = document.getElementById('bulkInput');
+    input.value = input.value ? input.value + '\n' + url : url;
+    document.getElementById('dlStatus').textContent = "Added to queue from Niche Finder.";
+    document.getElementById('dlStatus').className = "status success";
+    formatUrls();
+  };
+
   async function searchNiche() {
     const apiKey = document.getElementById('ytApiKey').value.trim();
     const query = document.getElementById('nicheQuery').value.trim();
@@ -382,3 +405,79 @@
     const maxResults = document.getElementById('nicheMax').value;
     
     const statusEl = document.getElementById('nicheStatus');
+    const btn = document.getElementById('searchNicheBtn');
+
+    if (!apiKey) {
+      statusEl.textContent = "API Key is required.";
+      statusEl.className = "status error";
+      return;
+    }
+
+    localStorage.setItem("yt_api_key", apiKey);
+    
+    btn.disabled = true;
+    statusEl.textContent = "Scanning YouTube Data API...";
+    statusEl.className = "status active";
+    
+    document.getElementById('nicheListHeader').style.display = 'none';
+    document.getElementById('nicheList').innerHTML = '';
+
+    try {
+      const res = await fetch(`${BACKEND}/youtube-niche`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKey, query: query, period: period, max_results: maxResults })
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        statusEl.textContent = `Error: ${data.error || 'Failed to fetch'}`;
+        statusEl.className = "status error";
+        btn.disabled = false;
+        return;
+      }
+
+      if (data.results && data.results.length > 0) {
+        document.getElementById('nicheListHeader').style.display = 'flex';
+        document.getElementById('nicheListCount').innerText = `${data.results.length} Explosive Videos Found`;
+        
+        const listDiv = document.getElementById('nicheList');
+        
+        data.results.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'data-item';
+          
+          row.innerHTML = `
+            <div class="niche-title" title="${item.title}">${item.title}</div>
+            <div class="niche-stats">
+              <span>👤 ${item.channel}</span>
+              <span>👁️ ${formatNumber(item.views)} Views</span>
+              <span>👥 ${formatNumber(item.subs)} Subs</span>
+              <span>🗓️ ${item.age_days} Days Old</span>
+            </div>
+            <div class="niche-links">
+              <a href="${item.video_link}" target="_blank">▶️ Watch Video</a>
+              <a href="${item.channel_link}" target="_blank">👤 View Channel</a>
+              <a href="javascript:void(0)" onclick="sendToDownloader('${item.video_link}')">⬇️ Queue to Download</a>
+            </div>
+          `;
+          listDiv.appendChild(row);
+        });
+
+        statusEl.textContent = "Analysis complete.";
+        statusEl.className = "status success";
+      } else {
+        statusEl.textContent = "No recent videos found for this topic.";
+        statusEl.className = "status error";
+      }
+    } catch (error) {
+      statusEl.textContent = "Network error connecting to backend.";
+      statusEl.className = "status error";
+    }
+    
+    btn.disabled = false;
+  }
+</script>
+</body>
+</html>
