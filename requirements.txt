@@ -3,3 +3,5 @@ flask-cors==4.0.0
 yt-dlp
 gunicorn
 requests
+google-api-python-client
+python-dateutil
