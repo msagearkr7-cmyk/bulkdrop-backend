@@ -1,19 +1,4 @@
-from flask import Flask, send_from_directory # Ensure this is imported
-from flask_cors import CORS
-# ... keep your other imports ...
-
-app = Flask(__name__)
-CORS(app, origins="*")
-
-# This tells Render to show your index.html when visitors hit your base URL
-@app.route('/')
-def home():
-    return send_from_directory('.', 'index.html')
-
-# Keep your existing /download and /youtube-niche routes below...
-
-
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response, send_from_directory
 from flask_cors import CORS
 import yt_dlp
 import os
@@ -25,9 +10,11 @@ from datetime import datetime, timezone, timedelta
 app = Flask(__name__)
 CORS(app, origins="*")
 
+# --- 0. SERVE THE UI ---
 @app.route('/')
 def home():
-    return "BulkDrop & Niche Engine Running"
+    # This serves your index.html file from the root directory
+    return send_from_directory('.', 'index.html')
 
 # --- 1. MULTI-PLATFORM DOWNLOADER ---
 @app.route('/download', methods=['POST'])
@@ -162,4 +149,3 @@ def youtube_niche():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
-    
