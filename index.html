@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BulkDrop Pro</title>
+<title>BulkDrop Pro & Niche Intelligence</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   
@@ -33,7 +33,13 @@
   body::after { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #bf5af2; animation-delay: -5s; }
   @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 5%) scale(1.1); } }
 
-  .logo { font-size: 13px; font-weight: 500; letter-spacing: 0.1em; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 32px; text-align: center; }
+  /* Navigation */
+  .nav-tabs { display: flex; gap: 8px; margin-bottom: 24px; background: rgba(30, 30, 35, 0.4); padding: 6px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(24px); }
+  .nav-tab { padding: 10px 20px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); cursor: pointer; border-radius: 12px; transition: all 0.2s; }
+  .nav-tab.active { background: rgba(255,255,255,0.1); color: #fff; }
+  .nav-tab:hover:not(.active) { color: #fff; }
+
+  .logo { font-size: 13px; font-weight: 500; letter-spacing: 0.1em; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 24px; text-align: center; }
   .logo span { color: #fff; font-size: 28px; font-weight: 700; display: block; letter-spacing: 0; margin-bottom: 4px; }
   
   .box { width: 100%; max-width: 650px; }
@@ -52,14 +58,17 @@
   .settings-toggle:hover { color: #fff; }
   .settings-panel { display: none; background: rgba(0,0,0,0.3); border-radius: 16px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); }
   
-  .cookie-group { margin-bottom: 12px; }
-  .cookie-group label { display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .settings-panel textarea { width: 100%; height: 70px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); color: #a1a1a6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 12px; resize: vertical; outline: none; border-radius: 12px; transition: border 0.2s;}
-  .settings-panel textarea:focus { border-color: rgba(255,255,255,0.3); }
+  .input-group { margin-bottom: 12px; }
+  .input-group label { display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.7); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
   
-  .main-input { width: 100%; height: 160px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.1); color: #f5f5f7; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; border-radius: 16px; outline: none; resize: vertical; margin-bottom: 16px; transition: all 0.2s; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);}
-  .main-input:focus { border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); box-shadow: 0 0 0 4px rgba(255,255,255,0.05); }
-  .main-input::placeholder { color: rgba(255,255,255,0.3); }
+  textarea, .text-input, select { width: 100%; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.1); color: #f5f5f7; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; border-radius: 16px; outline: none; transition: all 0.2s; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);}
+  textarea { height: 160px; resize: vertical; margin-bottom: 16px; }
+  .text-input, select { height: 50px; margin-bottom: 16px; }
+  textarea:focus, .text-input:focus, select:focus { border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); box-shadow: 0 0 0 4px rgba(255,255,255,0.05); }
+  textarea::placeholder, .text-input::placeholder { color: rgba(255,255,255,0.3); }
+
+  .row-inputs { display: flex; gap: 12px; }
+  .row-inputs .input-group { flex: 1; }
 
   button { background: #fff; color: #000; border: none; padding: 14px 24px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 14px; transition: all 0.2s; width: 100%; font-family: inherit;}
   button:hover { transform: scale(0.98); opacity: 0.9; }
@@ -74,13 +83,20 @@
   .status.error { color: #ff453a; }
   .status.success { color: #32d74b; }
   
-  .action-row { display: flex; gap: 12px; margin-top: 16px; }
-  
   .list-header { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 32px; margin-bottom: 12px; display: none; justify-content: space-between;}
-  .user-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 4px;}
-  .user-item { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; transition: background 0.2s;}
-  .user-item:hover { background: rgba(255, 255, 255, 0.08); }
+  .data-list { display: flex; flex-direction: column; gap: 8px; max-height: 500px; overflow-y: auto; padding-right: 4px;}
   
+  .data-item { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; transition: background 0.2s;}
+  .data-item:hover { background: rgba(255, 255, 255, 0.08); }
+  
+  .dl-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  
+  .niche-title { font-weight: 600; color: #fff; font-size: 14px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+  .niche-stats { display: flex; gap: 12px; font-size: 11px; color: rgba(255,255,255,0.6); }
+  .niche-links { display: flex; gap: 8px; margin-top: 8px; }
+  .niche-links a { color: #0a84ff; text-decoration: none; font-size: 11px; font-weight: 600; background: rgba(10, 132, 255, 0.15); padding: 4px 10px; border-radius: 8px; transition: background 0.2s; }
+  .niche-links a:hover { background: rgba(10, 132, 255, 0.25); }
+
   .plat-badge { font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; flex-shrink: 0;}
   .bg-ig { background: rgba(225, 48, 108, 0.2); color: #ff307b; }
   .bg-tt { background: rgba(255, 255, 255, 0.1); color: #fff; }
@@ -105,9 +121,15 @@
 
 <div class="logo"><span>BulkDrop Pro</span>Multi-Platform Engine</div>
 
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="switchTab('downloader')" id="tab-downloader">Batch Downloader</div>
+  <div class="nav-tab" onclick="switchTab('niche')" id="tab-niche">Niche Finder Intelligence</div>
+</div>
+
 <div class="box">
   
-  <div class="glass-panel">
+  <!-- VIEW 1: DOWNLOADER -->
+  <div class="glass-panel" id="view-downloader">
     <div class="settings-toggle" onclick="toggleSettings()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       Authentication Setup
@@ -118,47 +140,79 @@
         <span>Platform Cookies Setup:</span>
         <span style="color: #0a84ff; cursor:pointer;" onclick="saveCookies()">Save Settings</span>
       </div>
-      
-      <div class="cookie-group">
-        <label>Instagram Cookies</label>
-        <textarea id="cookiesIg" placeholder="# Netscape HTTP Cookie File..."></textarea>
-      </div>
-      
-      <div class="cookie-group">
-        <label>TikTok Cookies</label>
-        <textarea id="cookiesTt" placeholder="# Netscape HTTP Cookie File..."></textarea>
-      </div>
-
-      <div class="cookie-group">
-        <label>Facebook Cookies</label>
-        <textarea id="cookiesFb" placeholder="# Netscape HTTP Cookie File..."></textarea>
-      </div>
-      
-      <div class="cookie-group">
-        <label>YouTube Cookies</label>
-        <textarea id="cookiesYt" placeholder="# Netscape HTTP Cookie File..."></textarea>
-      </div>
+      <div class="input-group"><label>Instagram Cookies</label><textarea id="cookiesIg" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
+      <div class="input-group"><label>TikTok Cookies</label><textarea id="cookiesTt" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
+      <div class="input-group"><label>Facebook Cookies</label><textarea id="cookiesFb" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
+      <div class="input-group"><label>YouTube Cookies</label><textarea id="cookiesYt" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
     </div>
 
-    <textarea id="bulkInput" class="main-input" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;https://www.facebook.com/watch/?v=123&#10;Glued links and messy text are okay!"></textarea>
-    
+    <textarea id="bulkInput" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;Glued links and messy text are okay!"></textarea>
     <button id="formatBtn" onclick="formatUrls()">Format Batch List</button>
-    
-    <div class="status" id="mainStatus">Ready to process links.</div>
+    <div class="status" id="dlStatus">Ready to process links.</div>
 
-    <div class="list-header" id="listHeader">
-      <span id="listCount">0 Videos Found</span>
-    </div>
-    <div class="user-list" id="urlList"></div>
+    <div class="list-header" id="dlListHeader"><span id="dlListCount">0 Videos Found</span></div>
+    <div class="data-list" id="urlList"></div>
 
-    <div class="action-row" id="actionRow" style="display:none;">
-      <button class="btn-accent" id="downloadAllBtn" onclick="downloadAll()">Start Batch Download</button>
+    <div style="display:flex; gap:12px; margin-top:16px;">
+      <button class="btn-accent" id="downloadAllBtn" onclick="downloadAll()" style="display:none;">Start Batch Download</button>
     </div>
   </div>
+
+  <!-- VIEW 2: NICHE FINDER -->
+  <div class="glass-panel" id="view-niche" style="display:none;">
+    <div class="input-group">
+      <label>YouTube API v3 Key (Required)</label>
+      <input type="password" id="ytApiKey" class="text-input" placeholder="AIzaSy...">
+    </div>
+    
+    <div class="input-group">
+      <label>Niche Keyword</label>
+      <input type="text" id="nicheQuery" class="text-input" value="AI Tools" placeholder="e.g., Faceless Animation">
+    </div>
+
+    <div class="row-inputs">
+      <div class="input-group">
+        <label>Time Period</label>
+        <select id="nichePeriod">
+          <option value="1">Last 24 Hours</option>
+          <option value="7" selected>Last 7 Days</option>
+          <option value="30">Last 30 Days</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label>Max Results</label>
+        <select id="nicheMax">
+          <option value="10">10 Videos</option>
+          <option value="25" selected>25 Videos</option>
+          <option value="50">50 Videos</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="searchNicheBtn" onclick="searchNiche()">Find Exploding Content</button>
+    <div class="status" id="nicheStatus">Ready to analyze market.</div>
+
+    <div class="list-header" id="nicheListHeader"><span id="nicheListCount">Results</span></div>
+    <div class="data-list" id="nicheList"></div>
+  </div>
+
 </div>
 
 <script>
+  // Use your deployed URL here!
   const BACKEND = 'https://bulkdrop-backend.onrender.com'; 
+  
+  // --- UI TOGGLE LOGIC ---
+  function switchTab(tab) {
+    document.getElementById('view-downloader').style.display = tab === 'downloader' ? 'block' : 'none';
+    document.getElementById('view-niche').style.display = tab === 'niche' ? 'block' : 'none';
+    document.getElementById('tab-downloader').className = tab === 'downloader' ? 'nav-tab active' : 'nav-tab';
+    document.getElementById('tab-niche').className = tab === 'niche' ? 'nav-tab active' : 'nav-tab';
+  }
+
+  // ==========================================
+  // 1. DOWNLOADER LOGIC
+  // ==========================================
   let pendingUrls = [];
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -166,6 +220,7 @@
     document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
     document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
     document.getElementById("cookiesYt").value = localStorage.getItem("yt_cookies") || "";
+    document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
   });
 
   function toggleSettings() {
@@ -178,8 +233,8 @@
     localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
     localStorage.setItem("fb_cookies", document.getElementById("cookiesFb").value.trim());
     localStorage.setItem("yt_cookies", document.getElementById("cookiesYt").value.trim());
-    
-    setStatus("Cookies cached securely in browser.", "success");
+    document.getElementById("dlStatus").textContent = "Cookies cached securely.";
+    document.getElementById("dlStatus").className = "status success";
     toggleSettings();
   }
 
@@ -193,62 +248,49 @@
 
   function formatUrls() {
     const rawText = document.getElementById('bulkInput').value;
-    
     const spacedText = rawText.replace(/(https?:\/\/)/gi, ' $1');
     const urlRegex = /(https?:\/\/[^\s,]+)/g;
     const allUrls = spacedText.match(urlRegex) || [];
     
     const validUrls = allUrls.filter(url => {
       const lower = url.toLowerCase();
-      return lower.includes('instagram.com') || 
-             lower.includes('tiktok.com') || 
-             lower.includes('facebook.com') || 
-             lower.includes('fb.watch') || 
-             lower.includes('youtube.com') || 
-             lower.includes('youtu.be');
+      return lower.includes('instagram') || lower.includes('tiktok') || lower.includes('facebook') || lower.includes('fb.watch') || lower.includes('youtube') || lower.includes('youtu.be');
     });
 
     const uniqueUrls = [...new Set(validUrls)];
 
     if (uniqueUrls.length === 0) {
-      setStatus("No valid IG, TikTok, FB, or YouTube URLs found.", "error");
+      document.getElementById('dlStatus').textContent = "No valid URLs found.";
+      document.getElementById('dlStatus').className = "status error";
       return;
     }
 
     pendingUrls = uniqueUrls.map((url, index) => {
-      const platform = detectPlatform(url);
-      return {
-        id: `item-${index}`,
-        url: url,
-        platform: platform,
-        status: 'Ready',
-        cssClass: 'status-ready'
-      };
+      return { id: `item-${index}`, url: url, platform: detectPlatform(url), status: 'Ready', cssClass: 'status-ready' };
     });
 
-    renderList();
-    
-    document.getElementById('listHeader').style.display = 'flex';
-    document.getElementById('listCount').innerText = `${pendingUrls.length} Videos Queued`;
-    document.getElementById('actionRow').style.display = 'flex';
-    setStatus("List formatted. Ready for extraction.", "success");
+    renderDlList();
+    document.getElementById('dlListHeader').style.display = 'flex';
+    document.getElementById('dlListCount').innerText = `${pendingUrls.length} Videos Queued`;
+    document.getElementById('downloadAllBtn').style.display = 'block';
+    document.getElementById('dlStatus').textContent = "List formatted.";
+    document.getElementById('dlStatus').className = "status success";
   }
 
-  function renderList() {
+  function renderDlList() {
     const listDiv = document.getElementById('urlList');
     listDiv.innerHTML = '';
-
     pendingUrls.forEach(item => {
       const row = document.createElement('div');
-      row.className = 'user-item';
+      row.className = 'data-item';
       row.id = item.id;
-      
       const displayUrl = item.url.replace(/^https?:\/\/(www\.)?/, '');
-
       row.innerHTML = `
-        <div class="plat-badge ${item.platform.class}">${item.platform.name}</div>
-        <div class="item-url" title="${item.url}">${displayUrl}</div>
-        <div class="item-status ${item.cssClass}" id="status-${item.id}">${item.status}</div>
+        <div class="dl-row">
+          <div class="plat-badge ${item.platform.class}">${item.platform.name}</div>
+          <div class="item-url" title="${item.url}">${displayUrl}</div>
+          <div class="item-status ${item.cssClass}" id="status-${item.id}">${item.status}</div>
+        </div>
       `;
       listDiv.appendChild(row);
     });
@@ -256,25 +298,17 @@
 
   function updateItemStatus(id, text, cssClass) {
     const badge = document.getElementById(`status-${id}`);
-    if (badge) {
-      badge.textContent = text;
-      badge.className = `item-status ${cssClass}`;
-    }
+    if (badge) { badge.textContent = text; badge.className = `item-status ${cssClass}`; }
   }
 
   async function resolveAndDownload(item) {
     updateItemStatus(item.id, 'Extracting', 'status-working');
     
     let targetCookies = "";
-    if (item.platform.name === 'Instagram') {
-        targetCookies = localStorage.getItem("ig_cookies") || "";
-    } else if (item.platform.name === 'TikTok') {
-        targetCookies = localStorage.getItem("tt_cookies") || "";
-    } else if (item.platform.name === 'Facebook') {
-        targetCookies = localStorage.getItem("fb_cookies") || "";
-    } else if (item.platform.name === 'YouTube') {
-        targetCookies = localStorage.getItem("yt_cookies") || "";
-    }
+    if (item.platform.name === 'Instagram') targetCookies = localStorage.getItem("ig_cookies") || "";
+    if (item.platform.name === 'TikTok') targetCookies = localStorage.getItem("tt_cookies") || "";
+    if (item.platform.name === 'Facebook') targetCookies = localStorage.getItem("fb_cookies") || "";
+    if (item.platform.name === 'YouTube') targetCookies = localStorage.getItem("yt_cookies") || "";
 
     const isProxyPlatform = item.platform.name === 'TikTok' || item.platform.name === 'Facebook' || item.platform.name === 'Instagram';
     
@@ -285,86 +319,66 @@
         body: JSON.stringify({ url: item.url, cookies: targetCookies, proxy: isProxyPlatform })
       });
       
-      if (!res.ok) {
-        updateItemStatus(item.id, 'Failed', 'status-failed');
-        return false;
-      }
+      if (!res.ok) { updateItemStatus(item.id, 'Failed', 'status-failed'); return false; }
 
       if (isProxyPlatform) {
-        // TIKTOK, FACEBOOK & INSTAGRAM MODE: Read the raw binary stream directly into memory
         const blob = await res.blob();
-        
-        // Create an invisible link to force the phone to save the file
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
-        
-        // Add a unique timestamp to ensure the filename is never duplicated
-        const uniqueString = Date.now(); 
-        a.download = `${item.platform.name.toLowerCase()}_${uniqueString}.mp4`;
-        
+        a.download = `${item.platform.name.toLowerCase()}_${Date.now()}.mp4`;
         document.body.appendChild(a);
         a.click();
-        
-        // Clean up memory
         a.remove();
         URL.revokeObjectURL(blobUrl);
-        
         updateItemStatus(item.id, 'Completed', 'status-done');
         return true;
-        
       } else {
-        // YOUTUBE MODE: Open the URL in a new tab normally
         const data = await res.json();
         if (data.url) {
             updateItemStatus(item.id, 'Completed', 'status-done');
             let dlLink = data.url;
-            if (!dlLink.includes('dl=1') && !dlLink.includes('googlevideo')) {
-                dlLink += (dlLink.includes('?') ? '&dl=1' : '?dl=1');
-            }
+            if (!dlLink.includes('dl=1') && !dlLink.includes('googlevideo')) { dlLink += (dlLink.includes('?') ? '&dl=1' : '?dl=1'); }
             window.open(dlLink, '_blank');
             return true;
         }
       }
-    } catch (err) {
-      updateItemStatus(item.id, 'Error', 'status-failed');
-      return false;
-    }
+    } catch (err) { updateItemStatus(item.id, 'Error', 'status-failed'); return false; }
   }
 
   async function downloadAll() {
-    alert("Please ensure your browser allows pop-ups for this site before continuing!");
-    
+    alert("Please ensure your browser allows pop-ups!");
     const btn = document.getElementById('downloadAllBtn');
     btn.disabled = true;
-    
-    setStatus("Processing multi-platform batch queue...", "active");
+    document.getElementById('dlStatus').textContent = "Processing queue...";
+    document.getElementById('dlStatus').className = "status active";
 
     for (let i = 0; i < pendingUrls.length; i++) {
       const item = pendingUrls[i];
-      
-      const rowElement = document.getElementById(item.id);
-      if (rowElement) {
-        rowElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-
+      document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       await resolveAndDownload(item);
-      
-      if (i < pendingUrls.length - 1) {
-        setStatus(`Waiting 2 seconds... (${i + 1}/${pendingUrls.length} complete)`, "active");
-        await new Promise(r => setTimeout(r, 2000)); 
-      }
+      if (i < pendingUrls.length - 1) await new Promise(r => setTimeout(r, 2000)); 
     }
     
-    setStatus('Batch download sequence finished.', 'success');
+    document.getElementById('dlStatus').textContent = "Batch sequence finished.";
+    document.getElementById('dlStatus').className = "status success";
     btn.disabled = false;
   }
 
-  function setStatus(msg, type = '') {
-    const el = document.getElementById('mainStatus');
-    el.textContent = msg;
-    el.className = 'status ' + type;
+
+  // ==========================================
+  // 2. NICHE FINDER LOGIC
+  // ==========================================
+  function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num;
   }
-</script>
-</body>
-</html>
+
+  async function searchNiche() {
+    const apiKey = document.getElementById('ytApiKey').value.trim();
+    const query = document.getElementById('nicheQuery').value.trim();
+    const period = document.getElementById('nichePeriod').value;
+    const maxResults = document.getElementById('nicheMax').value;
+    
+    const statusEl = document.getElementById('nicheStatus');
