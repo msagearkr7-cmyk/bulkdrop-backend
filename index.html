@@ -105,9 +105,9 @@
 
 <div class="logo"><span>BulkDrop Pro</span>Multi-Platform Engine</div>
 
-<!-- ADDITION 1: Launch app.py link (using a simple styled div to prevent button conflicts) -->
+<!-- LIVE LINKED BUTTON: Connects to your live Streamlit interface -->
 <div style="display: flex; justify-content: center; margin-bottom: 24px; width: 100%; max-width: 650px;">
-  <div style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 12px 24px; font-size: 13px; font-weight: 600; border-radius: 14px; cursor: pointer; text-align: center;" onclick="window.open('https://your-streamlit-app-url.com', '_blank')">
+  <div style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 12px 24px; font-size: 13px; font-weight: 600; border-radius: 14px; cursor: pointer; text-align: center;" onclick="window.open('https://bulkdrop-niche-finder.onrender.com', '_blank')">
     🔍 Launch Niche Finder Intelligence
   </div>
 </div>
@@ -126,7 +126,6 @@
         <span style="color: #0a84ff; cursor:pointer;" onclick="saveCookies()">Save Settings</span>
       </div>
       
-      <!-- ADDITION 2: YouTube API Key Field -->
       <div class="cookie-group">
         <label>YouTube API v3 Key</label>
         <textarea id="ytApiKey" style="height: 50px;" placeholder="AIzaSy..."></textarea>
@@ -175,9 +174,7 @@
   let pendingUrls = [];
 
   document.addEventListener("DOMContentLoaded", () => {
-    // ADDITION 3: Load the saved API key
     document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
-    
     document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
     document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
     document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
@@ -190,9 +187,7 @@
   }
 
   function saveCookies() {
-    // ADDITION 4: Save the API key
     localStorage.setItem("yt_api_key", document.getElementById("ytApiKey").value.trim());
-    
     localStorage.setItem("ig_cookies", document.getElementById("cookiesIg").value.trim());
     localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
     localStorage.setItem("fb_cookies", document.getElementById("cookiesFb").value.trim());
@@ -310,22 +305,17 @@
       }
 
       if (isProxyPlatform) {
-        // TIKTOK, FACEBOOK & INSTAGRAM MODE: Read the raw binary stream directly into memory
         const blob = await res.blob();
-        
-        // Create an invisible link to force the phone to save the file
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
         
-        // Add a unique timestamp to ensure the filename is never duplicated
         const uniqueString = Date.now(); 
         a.download = `${item.platform.name.toLowerCase()}_${uniqueString}.mp4`;
         
         document.body.appendChild(a);
         a.click();
         
-        // Clean up memory
         a.remove();
         URL.revokeObjectURL(blobUrl);
         
@@ -333,7 +323,6 @@
         return true;
         
       } else {
-        // YOUTUBE MODE: Open the URL in a new tab normally
         const data = await res.json();
         if (data.url) {
             updateItemStatus(item.id, 'Completed', 'status-done');
