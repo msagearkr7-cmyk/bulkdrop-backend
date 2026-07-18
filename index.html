@@ -33,10 +33,7 @@
   body::after { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #bf5af2; animation-delay: -5s; }
   @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 5%) scale(1.1); } }
 
-  /* Navigation */
   .nav-tabs { display: flex; gap: 8px; margin-bottom: 24px; background: rgba(30, 30, 35, 0.4); padding: 6px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(24px); }
-  
-  /* Added user-select: none to prevent text highlighting on mobile */
   .nav-tab { 
     padding: 10px 20px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.5); cursor: pointer; border-radius: 12px; transition: all 0.2s; 
     -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
@@ -59,7 +56,6 @@
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
-  /* Added user-select: none to prevent text highlighting on mobile */
   .settings-toggle { 
     font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.5); cursor: pointer; text-align: right; margin-bottom: 16px; transition: color 0.2s; display: flex; justify-content: flex-end; align-items: center; gap: 6px;
     -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
@@ -130,17 +126,17 @@
 
 <div class="logo"><span>BulkDrop Pro</span>Multi-Platform Engine</div>
 
-<!-- Nav tabs now use direct IDs without inline onclicks -->
+<!-- Inline onclicks are used here for maximum mobile compatibility -->
 <div class="nav-tabs">
-  <div class="nav-tab active" id="tab-downloader">Batch Downloader</div>
-  <div class="nav-tab" id="tab-niche">Niche Finder Intelligence</div>
+  <div class="nav-tab active" onclick="switchTab('downloader')" id="tab-downloader">Batch Downloader</div>
+  <div class="nav-tab" onclick="switchTab('niche')" id="tab-niche">Niche Finder Intelligence</div>
 </div>
 
 <div class="box">
   
   <!-- VIEW 1: DOWNLOADER -->
   <div class="glass-panel" id="view-downloader">
-    <div class="settings-toggle" id="btn-toggle-settings">
+    <div class="settings-toggle" onclick="toggleSettings()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       Authentication Setup
     </div>
@@ -148,7 +144,7 @@
     <div class="settings-panel" id="settingsPanel">
       <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); justify-content: space-between; display: flex; margin-bottom: 12px;">
         <span>Platform Cookies Setup:</span>
-        <span style="color: #0a84ff; cursor:pointer;" id="btn-save-cookies">Save Settings</span>
+        <span style="color: #0a84ff; cursor:pointer;" onclick="saveCookies()">Save Settings</span>
       </div>
       <div class="input-group"><label>Instagram Cookies</label><textarea id="cookiesIg" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
       <div class="input-group"><label>TikTok Cookies</label><textarea id="cookiesTt" style="height: 70px" placeholder="# Netscape HTTP Cookie File..."></textarea></div>
@@ -157,14 +153,14 @@
     </div>
 
     <textarea id="bulkInput" placeholder="Paste Video URLs here...&#10;https://www.instagram.com/reel/abc123/&#10;https://www.tiktok.com/@user/video/12345&#10;Glued links and messy text are okay!"></textarea>
-    <button id="formatBtn">Format Batch List</button>
+    <button onclick="formatUrls()">Format Batch List</button>
     <div class="status" id="dlStatus">Ready to process links.</div>
 
     <div class="list-header" id="dlListHeader"><span id="dlListCount">0 Videos Found</span></div>
     <div class="data-list" id="urlList"></div>
 
     <div style="display:flex; gap:12px; margin-top:16px;">
-      <button class="btn-accent" id="downloadAllBtn" style="display:none;">Start Batch Download</button>
+      <button class="btn-accent" id="downloadAllBtn" onclick="downloadAll()" style="display:none;">Start Batch Download</button>
     </div>
   </div>
 
@@ -199,7 +195,7 @@
       </div>
     </div>
 
-    <button id="searchNicheBtn">Find Exploding Content</button>
+    <button onclick="searchNiche()">Find Exploding Content</button>
     <div class="status" id="nicheStatus">Ready to analyze market.</div>
 
     <div class="list-header" id="nicheListHeader"><span id="nicheListCount">Results</span></div>
@@ -212,6 +208,27 @@
   // Use your deployed URL here!
   const BACKEND = 'https://bulkdrop-backend.onrender.com'; 
   
+  // Safe storage wrappers to prevent mobile security crashes
+  function safeGet(key) {
+    try { return localStorage.getItem(key) || ""; } catch(e) { return ""; }
+  }
+  function safeSet(key, value) {
+    try { localStorage.setItem(key, value); } catch(e) { console.warn("Storage blocked"); }
+  }
+
+  // --- APP INITIALIZATION ---
+  // Runs immediately, no events needed
+  function initApp() {
+    document.getElementById("cookiesIg").value = safeGet("ig_cookies");
+    document.getElementById("cookiesTt").value = safeGet("tt_cookies");
+    document.getElementById("cookiesFb").value = safeGet("fb_cookies");
+    document.getElementById("cookiesYt").value = safeGet("yt_cookies");
+    document.getElementById("ytApiKey").value = safeGet("yt_api_key");
+  }
+  
+  // Start up
+  initApp();
+
   // --- UI TOGGLE LOGIC ---
   function switchTab(tab) {
     document.getElementById('view-downloader').style.display = tab === 'downloader' ? 'block' : 'none';
@@ -225,44 +242,17 @@
   // ==========================================
   let pendingUrls = [];
 
-  document.addEventListener("DOMContentLoaded", () => {
-    // Bind Tab Clicks natively
-    document.getElementById("tab-downloader").addEventListener("click", () => switchTab('downloader'));
-    document.getElementById("tab-niche").addEventListener("click", () => switchTab('niche'));
-    
-    // Bind Button Clicks natively
-    document.getElementById("btn-toggle-settings").addEventListener("click", toggleSettings);
-    document.getElementById("btn-save-cookies").addEventListener("click", saveCookies);
-    document.getElementById("formatBtn").addEventListener("click", formatUrls);
-    document.getElementById("downloadAllBtn").addEventListener("click", downloadAll);
-    document.getElementById("searchNicheBtn").addEventListener("click", searchNiche);
-
-    // Added Try/Catch so local file opening won't crash the JS
-    try {
-      document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
-      document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
-      document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
-      document.getElementById("cookiesYt").value = localStorage.getItem("yt_cookies") || "";
-      document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
-    } catch(e) {
-      console.warn("Local storage blocked by mobile file viewer security.");
-    }
-  });
-
   function toggleSettings() {
     const panel = document.getElementById("settingsPanel");
     panel.style.display = panel.style.display === "block" ? "none" : "block";
   }
 
   function saveCookies() {
-    try {
-      localStorage.setItem("ig_cookies", document.getElementById("cookiesIg").value.trim());
-      localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
-      localStorage.setItem("fb_cookies", document.getElementById("cookiesFb").value.trim());
-      localStorage.setItem("yt_cookies", document.getElementById("cookiesYt").value.trim());
-    } catch(e) {
-      console.warn("Could not save cookies due to local file security.");
-    }
+    safeSet("ig_cookies", document.getElementById("cookiesIg").value.trim());
+    safeSet("tt_cookies", document.getElementById("cookiesTt").value.trim());
+    safeSet("fb_cookies", document.getElementById("cookiesFb").value.trim());
+    safeSet("yt_cookies", document.getElementById("cookiesYt").value.trim());
+    
     document.getElementById("dlStatus").textContent = "Cookies cached securely.";
     document.getElementById("dlStatus").className = "status success";
     toggleSettings();
@@ -335,12 +325,10 @@
     updateItemStatus(item.id, 'Extracting', 'status-working');
     
     let targetCookies = "";
-    try {
-      if (item.platform.name === 'Instagram') targetCookies = localStorage.getItem("ig_cookies") || "";
-      if (item.platform.name === 'TikTok') targetCookies = localStorage.getItem("tt_cookies") || "";
-      if (item.platform.name === 'Facebook') targetCookies = localStorage.getItem("fb_cookies") || "";
-      if (item.platform.name === 'YouTube') targetCookies = localStorage.getItem("yt_cookies") || "";
-    } catch (e) {}
+    if (item.platform.name === 'Instagram') targetCookies = safeGet("ig_cookies");
+    if (item.platform.name === 'TikTok') targetCookies = safeGet("tt_cookies");
+    if (item.platform.name === 'Facebook') targetCookies = safeGet("fb_cookies");
+    if (item.platform.name === 'YouTube') targetCookies = safeGet("yt_cookies");
 
     const isProxyPlatform = item.platform.name === 'TikTok' || item.platform.name === 'Facebook' || item.platform.name === 'Instagram';
     
@@ -380,4 +368,27 @@
 
   async function downloadAll() {
     alert("Please ensure your browser allows pop-ups!");
-    const btn = document.getElementById('downloa
+    const btn = document.getElementById('downloadAllBtn');
+    btn.disabled = true;
+    document.getElementById('dlStatus').textContent = "Processing queue...";
+    document.getElementById('dlStatus').className = "status active";
+
+    for (let i = 0; i < pendingUrls.length; i++) {
+      const item = pendingUrls[i];
+      document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      await resolveAndDownload(item);
+      if (i < pendingUrls.length - 1) await new Promise(r => setTimeout(r, 2000)); 
+    }
+    
+    document.getElementById('dlStatus').textContent = "Batch sequence finished.";
+    document.getElementById('dlStatus').className = "status success";
+    btn.disabled = false;
+  }
+
+
+  // ==========================================
+  // 2. NICHE FINDER LOGIC
+  // ==========================================
+  function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).
