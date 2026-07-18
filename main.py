@@ -1,3 +1,18 @@
+from flask import Flask, send_from_directory # Ensure this is imported
+from flask_cors import CORS
+# ... keep your other imports ...
+
+app = Flask(__name__)
+CORS(app, origins="*")
+
+# This tells Render to show your index.html when visitors hit your base URL
+@app.route('/')
+def home():
+    return send_from_directory('.', 'index.html')
+
+# Keep your existing /download and /youtube-niche routes below...
+
+
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 import yt_dlp
