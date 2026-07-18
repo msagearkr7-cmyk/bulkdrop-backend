@@ -18,7 +18,7 @@
     padding: 40px 24px; 
     position: relative;
     overflow-x: hidden;
-  } 
+  }
 
   body::before, body::after {
     content: '';
@@ -276,7 +276,7 @@
         targetCookies = localStorage.getItem("yt_cookies") || "";
     }
 
-    const isProxyPlatform = item.platform.name === 'TikTok' || item.platform.name === 'Facebook';
+    const isProxyPlatform = item.platform.name === 'TikTok' || item.platform.name === 'Facebook' || item.platform.name === 'Instagram';
     
     try {
       const res = await fetch(`${BACKEND}/download`, {
@@ -291,14 +291,18 @@
       }
 
       if (isProxyPlatform) {
-        // TIKTOK & FACEBOOK MODE: Read the raw binary stream directly into memory
+        // TIKTOK, FACEBOOK & INSTAGRAM MODE: Read the raw binary stream directly into memory
         const blob = await res.blob();
         
         // Create an invisible link to force the phone to save the file
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
-        a.download = `${item.platform.name.toLowerCase()}_${item.id}.mp4`;
+        
+        // Add a unique timestamp to ensure the filename is never duplicated
+        const uniqueString = Date.now(); 
+        a.download = `${item.platform.name.toLowerCase()}_${uniqueString}.mp4`;
+        
         document.body.appendChild(a);
         a.click();
         
@@ -310,7 +314,7 @@
         return true;
         
       } else {
-        // IG & YOUTUBE MODE: Open the URL in a new tab normally
+        // YOUTUBE MODE: Open the URL in a new tab normally
         const data = await res.json();
         if (data.url) {
             updateItemStatus(item.id, 'Completed', 'status-done');
@@ -364,4 +368,3 @@
 </script>
 </body>
 </html>
-
