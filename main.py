@@ -7,17 +7,6 @@ import uuid
 app = Flask(__name__)
 CORS(app, origins="*")
 
-def handle_incoming_cookies(cookies_text):
-    """Writes incoming platform cookies to a local file for yt-dlp to utilize."""
-    if cookies_text and cookies_text.strip():
-        with open('cookies.txt', 'w', encoding='utf-8') as f:
-            f.write(cookies_text.strip())
-    elif os.path.exists('cookies.txt'):
-        try:
-            os.remove('cookies.txt')
-        except:
-            pass
-
 @app.route('/')
 def home():
     return "BulkDrop Multi-Platform Engine Running"
@@ -32,8 +21,13 @@ def download():
     if not url:
         return jsonify({'error': 'URL required'}), 400
 
-    # Dynamically write the specific platform cookies passed from the frontend
-    handle_incoming_cookies(cookies_text)
+    # Create a unique cookie file for this specific request to prevent race conditions
+    unique_id = uuid.uuid4().hex
+    cookie_filename = f"cookies_{unique_id}.txt"
+    
+    if cookies_text:
+        with open(cookie_filename, 'w', encoding='utf-8') as f:
+            f.write(cookies_text)
 
     # Advanced stealth configuration to mimic browser signatures
     ydl_opts = {
@@ -46,14 +40,13 @@ def download():
         'geo_bypass_country': 'US'
     }
     
-    # Apply cookie file if authentication text was provided
-    if os.path.exists('cookies.txt') and cookies_text:
-        ydl_opts['cookiefile'] = 'cookies.txt'
+    if os.path.exists(cookie_filename):
+        ydl_opts['cookiefile'] = cookie_filename
     
     try:
         if use_proxy:
-            # PROXY MODE (TikTok & Facebook): Downloads file to Render disk to bypass blocks
-            temp_filename = f"temp_{uuid.uuid4().hex}.mp4"
+            # PROXY MODE (Instagram, TikTok & Facebook): Streams directly through Render
+            temp_filename = f"temp_{unique_id}.mp4"
             ydl_opts['outtmpl'] = temp_filename
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -63,35 +56,40 @@ def download():
                 with open(temp_filename, 'rb') as f:
                     video_data = f.read()
                 
-                # Instantly remove from server disk storage to save space
+                # Cleanup files immediately
                 os.remove(temp_filename)
+                if os.path.exists(cookie_filename):
+                    os.remove(cookie_filename)
                 
-                # Stream binary payload directly to client browser as a Blob download
                 return Response(
                     video_data,
                     mimetype='video/mp4',
-                    headers={'Content-Disposition': 'attachment; filename="clear_download.mp4"'}
+                    headers={'Content-Disposition': f'attachment; filename="{unique_id}.mp4"'}
                 )
             else:
                 return jsonify({'error': 'Failed to stream media file from proxy server'}), 500
         else:
-            # EXTRACTION MODE (Instagram): Extracts direct high-speed CDN URL link
+            # EXTRACTION MODE (YouTube): Extracts direct URL link
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 direct_url = info.get('url')
                 if not direct_url and 'formats' in info:
                     direct_url = info['formats'][-1]['url']
-                return jsonify({'url': direct_url})
+            
+            if os.path.exists(cookie_filename):
+                os.remove(cookie_filename)
+                
+            return jsonify({'url': direct_url})
                 
     except Exception as e:
-        # Fallback clean-up to prevent disk storage build-up if an execution crashes
-        if use_proxy and 'temp_filename' in locals() and os.path.exists(temp_filename):
-            try:
-                os.remove(temp_filename)
-            except:
-                pass
+        # Fallback cleanup on failure
+        if os.path.exists(cookie_filename):
+            try: os.remove(cookie_filename)
+            except: pass
+        if 'temp_filename' in locals() and os.path.exists(temp_filename):
+            try: os.remove(temp_filename)
+            except: pass
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
-
