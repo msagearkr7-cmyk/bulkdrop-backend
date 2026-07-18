@@ -1,500 +1,194 @@
+import base64
 from flask import Flask, render_template_string
 
 app = Flask(__name__)
 
-HTML_PAGE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Niche Finder</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
-  :root {
-    --glass-fill: rgba(255, 255, 255, 0.07);
-    --glass-fill-strong: rgba(255, 255, 255, 0.12);
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-border-soft: rgba(255, 255, 255, 0.07);
-    --ink: #f5f5f7;
-    --ink-dim: rgba(245, 245, 247, 0.55);
-    --ink-faint: rgba(245, 245, 247, 0.32);
-    --accent: #0a84ff;
-    --accent-2: #64d2ff;
-    --radius-lg: 28px;
-    --radius-md: 18px;
-    --radius-sm: 12px;
-  }
-
-  body {
-    background: #030304;
-    color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 56px 20px 40px;
-    position: relative;
-    overflow-x: hidden;
-  }
-
-  body::before, body::after {
-    content: '';
-    position: fixed;
-    border-radius: 50%;
-    filter: blur(130px);
-    z-index: -1;
-    opacity: 0.45;
-    animation: drift 18s infinite alternate ease-in-out;
-  }
-  body::before { top: -12%; left: -14%; width: 46vw; height: 46vw; background: #5e5ce6; }
-  body::after { bottom: -14%; right: -12%; width: 42vw; height: 42vw; background: #bf5af2; animation-delay: -6s; }
-  @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(4%, 4%) scale(1.12); } }
-
-  .brand { text-align: center; margin-bottom: 28px; }
-  .brand-mark { display: block; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
-  .brand-sub { display: block; margin-top: 5px; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
-
-  .box { width: 100%; max-width: 650px; }
-
-  .glass {
-    position: relative;
-    background: var(--glass-fill);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    backdrop-filter: blur(28px) saturate(160%);
-    border: 1px solid var(--glass-border);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 50px rgba(0,0,0,0.45);
-  }
-  .glass::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0) 40%);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
-
-  .glass-panel { border-radius: var(--radius-lg); padding: 24px; margin-top: 16px; }
-
-  .quick-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 650px; }
-
-  .pill-glass {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border-radius: 999px;
-    padding: 13px 20px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--ink-dim);
-    cursor: pointer;
-    transition: color 0.2s, background 0.2s;
-  }
-  .pill-glass:active { transform: scale(0.97); }
-  .pill-glass.mode-active { color: #fff; background: var(--accent) !important; border-color: transparent; }
-
-  .icon-glass {
-    flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--ink-dim);
-    cursor: pointer;
-    transition: color 0.2s, transform 0.15s;
-  }
-  .icon-glass:hover { color: #fff; }
-  .icon-glass:active { transform: scale(0.92); }
-  .icon-glass.is-open { color: var(--accent-2); }
-  .icon-glass svg { width: 18px; height: 18px; }
-
-  .settings-panel {
-    display: none;
-    background: rgba(0,0,0,0.32);
-    border-radius: var(--radius-md);
-    padding: 16px;
-    margin-bottom: 20px;
-    border: 1px solid var(--glass-border-soft);
-  }
-  .settings-panel-head {
-    font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--ink-dim); justify-content: space-between; display: flex; margin-bottom: 14px;
-  }
-  .settings-panel-head span:last-child { color: var(--accent-2); cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; }
-
-  .cookie-group { margin-bottom: 12px; }
-  .cookie-group:last-child { margin-bottom: 0; }
-  .cookie-group label { display: block; font-size: 10px; font-weight: 600; color: var(--ink-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
-  .settings-panel textarea {
-    width: 100%; height: 50px; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border-soft);
-    color: #a1a1a6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
-    padding: 11px; resize: vertical; outline: none; border-radius: var(--radius-sm); transition: border 0.2s;
-  }
-  .settings-panel textarea:focus { border-color: rgba(255,255,255,0.3); }
-
-  .settings-panel select {
-    width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border-soft);
-    color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 500;
-    padding: 12px 14px; outline: none; border-radius: var(--radius-sm); transition: border 0.2s;
-    appearance: none; -webkit-appearance: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a6' stroke-width='2'><polyline points='6 9 12 15 18 9'></polyline></svg>");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-  }
-  .settings-panel select:focus { border-color: rgba(255,255,255,0.3); }
-
-  .main-input {
-    width: 100%; background: rgba(0,0,0,0.28); border: 1px solid var(--glass-border-soft);
-    color: var(--ink); padding: 16px; font-family: inherit; font-size: 14px; line-height: 1.5;
-    border-radius: var(--radius-md); outline: none; margin-bottom: 16px;
-    transition: all 0.2s; box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
-  }
-  .main-input:focus { border-color: rgba(255,255,255,0.24); background: rgba(0,0,0,0.42); box-shadow: 0 0 0 4px rgba(10,132,255,0.12); }
-  .main-input::placeholder { color: var(--ink-faint); }
-
-  button { border: none; cursor: pointer; font-family: inherit; transition: all 0.15s; }
-
-  button.solid {
-    background: #fff; color: #000; padding: 15px 24px; font-size: 14px; font-weight: 600;
-    border-radius: 16px; width: 100%;
-  }
-  button.solid:hover { opacity: 0.9; transform: scale(0.99); }
-  button.solid:active { transform: scale(0.97); }
-  button.solid:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
-
-  .status { font-size: 13px; font-weight: 500; color: var(--ink-dim); min-height: 20px; margin-top: 16px; text-align: center; }
-  .status.active { color: var(--accent-2); }
-  .status.error { color: #ff453a; }
-  .status.success { color: #32d74b; }
-
-  .list-header {
-    font-size: 11px; font-weight: 600; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em;
-    margin-top: 32px; margin-bottom: 12px; display: none; justify-content: space-between;
-  }
-
-  .user-list { display: flex; flex-direction: column; gap: 8px; max-height: 500px; overflow-y: auto; padding-right: 4px; }
-
-  .result-card {
-    background: rgba(255,255,255,0.045); border: 1px solid var(--glass-border-soft); border-radius: var(--radius-sm);
-    padding: 14px 15px; display: flex; flex-direction: column; gap: 8px;
-    font-size: 13px; transition: background 0.2s;
-  }
-  .result-card:hover { background: rgba(255,255,255,0.085); }
-
-  .result-top { display: flex; align-items: flex-start; gap: 10px; }
-  .plat-badge { font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 7px; text-transform: uppercase; letter-spacing: 0.05em; text-align: center; flex-shrink: 0; margin-top: 1px; }
-  .bg-yt { background: rgba(255, 0, 0, 0.15); color: #ff453a; }
-  .bg-new { background: rgba(50, 215, 75, 0.15); color: #32d74b; }
-
-  .result-title { color: var(--ink); font-weight: 600; font-size: 13px; line-height: 1.4; flex: 1; }
-  .result-channel { color: var(--ink-dim); font-size: 12px; margin-top: 2px; }
-
-  .result-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11px; color: var(--ink-dim); padding-left: 2px; }
-  .result-meta b { color: var(--ink); font-weight: 600; }
-
-  .result-actions { display: flex; gap: 8px; }
-  .result-actions a {
-    font-size: 11px; font-weight: 600; padding: 7px 13px; border-radius: 8px;
-    background: rgba(255,255,255,0.08); color: #fff; text-decoration: none; transition: background 0.2s;
-  }
-  .result-actions a:hover { background: rgba(255,255,255,0.16); }
-
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-
-  @media (prefers-reduced-motion: reduce) {
-    body::before, body::after { animation: none; }
-  }
-
-  @media (max-width: 480px) {
-    body { padding: 40px 14px 32px; }
-    .brand-mark { font-size: 26px; }
-    .glass-panel { padding: 18px; }
-  }
-</style>
-</head>
-<body>
-
-<div class="brand">
-  <span class="brand-mark">Niche Finder</span>
-  <span class="brand-sub">YouTube Explosion Engine</span>
-</div>
-
-<div class="quick-row">
-  <div class="pill-glass glass mode-active" id="modeTrendingBtn" onclick="setMode('trending')">⚡ Trending Now</div>
-  <div class="pill-glass glass" id="modeKeywordBtn" onclick="setMode('keyword')">🔍 Keyword Explosion</div>
-  <div class="icon-glass glass" id="settingsBtn" onclick="toggleSettings()" title="Settings" role="button" aria-label="Settings" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-  </div>
-</div>
-
-<div class="box">
-
-  <div class="glass-panel glass">
-    <div class="settings-panel" id="settingsPanel">
-      <div class="settings-panel-head">
-        <span>API &amp; Search Settings</span>
-        <span onclick="saveSettings()">Save Settings</span>
-      </div>
-
-      <div class="cookie-group">
-        <label>YouTube API v3 Key</label>
-        <textarea id="ytApiKey" placeholder="AIzaSy..."></textarea>
-      </div>
-
-      <div class="cookie-group">
-        <label>Time Period</label>
-        <select id="periodSelect">
-          <option value="1">Last 24 Hours</option>
-          <option value="7" selected>Last 7 Days</option>
-          <option value="30">Last 30 Days</option>
-        </select>
-      </div>
-
-      <div class="cookie-group">
-        <label>Number of Results</label>
-        <select id="maxResultsSelect">
-          <option value="10">10</option>
-          <option value="20" selected>20</option>
-          <option value="30">30</option>
-          <option value="40">40</option>
-          <option value="50">50</option>
-        </select>
-      </div>
-    </div>
-
-    <input type="text" id="keywordInput" class="main-input" placeholder="e.g. minecraft speedrun, true crime, budget travel">
-
-    <button class="solid" id="actionBtn" onclick="runSearch()">Refresh Trending</button>
-
-    <div class="status" id="mainStatus">Ready to search.</div>
-
-    <div class="list-header" id="listHeader">
-      <span id="listCount">0 Videos Found</span>
-    </div>
-    <div class="user-list" id="resultsList"></div>
-  </div>
-</div>
-
-<script>
-  const API_BASE = 'https://www.googleapis.com/youtube/v3';
-  let mode = 'trending'; // 'trending' | 'keyword'
-
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
-    document.getElementById("periodSelect").value = localStorage.getItem("yt_period") || "7";
-    document.getElementById("maxResultsSelect").value = localStorage.getItem("yt_max_results") || "20";
-    updateModeUI();
-  });
-
-  function toggleSettings() {
-    const panel = document.getElementById("settingsPanel");
-    const btn = document.getElementById("settingsBtn");
-    const isOpen = panel.style.display === "block";
-    panel.style.display = isOpen ? "none" : "block";
-    btn.classList.toggle("is-open", !isOpen);
-    btn.setAttribute("aria-expanded", String(!isOpen));
-  }
-
-  function saveSettings() {
-    localStorage.setItem("yt_api_key", document.getElementById("ytApiKey").value.trim());
-    localStorage.setItem("yt_period", document.getElementById("periodSelect").value);
-    localStorage.setItem("yt_max_results", document.getElementById("maxResultsSelect").value);
-    setStatus("Settings saved.", "success");
-    toggleSettings();
-  }
-
-  function getApiKey() {
-    return localStorage.getItem("yt_api_key") || document.getElementById("ytApiKey").value.trim();
-  }
-
-  function setMode(newMode) {
-    mode = newMode;
-    updateModeUI();
-  }
-
-  function updateModeUI() {
-    document.getElementById("modeTrendingBtn").classList.toggle("mode-active", mode === "trending");
-    document.getElementById("modeKeywordBtn").classList.toggle("mode-active", mode === "keyword");
-
-    const input = document.getElementById("keywordInput");
-    const btn = document.getElementById("actionBtn");
-
-    if (mode === "trending") {
-      input.style.display = "none";
-      btn.textContent = "Refresh Trending";
-    } else {
-      input.style.display = "block";
-      btn.textContent = "Find Exploding Content";
-    }
-  }
-
-  function setStatus(msg, type = '') {
-    const el = document.getElementById('mainStatus');
-    el.textContent = msg;
-    el.className = 'status ' + type;
-  }
-
-  async function runSearch() {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      setStatus("Add your YouTube API key in Settings first.", "error");
-      return;
-    }
-
-    const btn = document.getElementById('actionBtn');
-    btn.disabled = true;
-
-    try {
-      if (mode === 'trending') {
-        await fetchTrending(apiKey);
-      } else {
-        const keyword = document.getElementById('keywordInput').value.trim();
-        if (!keyword) {
-          setStatus("Enter a keyword first.", "error");
-          btn.disabled = false;
-          return;
-        }
-        await fetchKeywordSearch(apiKey, keyword);
-      }
-    } catch (err) {
-      setStatus(`Error: ${err.message}`, "error");
-    }
-
-    btn.disabled = false;
-  }
-
-  async function fetchTrending(apiKey) {
-    setStatus("Fetching trending videos...", "active");
-
-    const url = `${API_BASE}/videos?part=snippet,statistics&chart=mostPopular&maxResults=25&key=${apiKey}`;
-    const res = await fetch(url);
-    const data = await res.json();
-
-    if (data.error) throw new Error(data.error.message);
-
-    await renderResults(apiKey, data.items || []);
-  }
-
-  async function fetchKeywordSearch(apiKey, keyword) {
-    setStatus("Searching for exploding content...", "active");
-
-    const days = parseInt(localStorage.getItem("yt_period") || "7", 10);
-    const maxResults = parseInt(localStorage.getItem("yt_max_results") || "20", 10);
-    const afterDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
-    const searchUrl = `${API_BASE}/search?part=snippet&q=${encodeURIComponent(keyword)}&type=video&order=viewCount&publishedAfter=${afterDate}&maxResults=${maxResults}&key=${apiKey}`;
-    const searchRes = await fetch(searchUrl);
-    const searchData = await searchRes.json();
-
-    if (searchData.error) throw new Error(searchData.error.message);
-
-    const videoIds = (searchData.items || []).map(item => item.id.videoId).filter(Boolean);
-    if (videoIds.length === 0) {
-      setStatus("No results for that keyword/time period. Try widening the time period.", "error");
-      renderList([]);
-      return;
-    }
-
-    const videosUrl = `${API_BASE}/videos?part=snippet,statistics&id=${videoIds.join(',')}&key=${apiKey}`;
-    const videosRes = await fetch(videosUrl);
-    const videosData = await videosRes.json();
-
-    if (videosData.error) throw new Error(videosData.error.message);
-
-    await renderResults(apiKey, videosData.items || []);
-  }
-
-  async function renderResults(apiKey, videoItems) {
-    if (videoItems.length === 0) {
-      setStatus("No results found.", "error");
-      renderList([]);
-      return;
-    }
-
-    const channelIds = [...new Set(videoItems.map(v => v.snippet.channelId))];
-    const channelsUrl = `${API_BASE}/channels?part=snippet,statistics&id=${channelIds.join(',')}&key=${apiKey}`;
-    const channelsRes = await fetch(channelsUrl);
-    const channelsData = await channelsRes.json();
-    const channelsById = {};
-    (channelsData.items || []).forEach(c => { channelsById[c.id] = c; });
-
-    const results = videoItems.map(item => {
-      const cId = item.snippet.channelId;
-      const cInfo = channelsById[cId];
-      const pubDate = cInfo ? new Date(cInfo.snippet.publishedAt) : new Date();
-      const ageDays = Math.floor((Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24));
-      const videoId = typeof item.id === 'string' ? item.id : item.id.videoId;
-
-      return {
-        title: item.snippet.title,
-        channel: item.snippet.channelTitle,
-        views: item.statistics ? parseInt(item.statistics.viewCount || 0, 10) : 0,
-        subs: cInfo && cInfo.statistics ? parseInt(cInfo.statistics.subscriberCount || 0, 10) : 0,
-        ageDays: ageDays,
-        videoLink: `https://www.youtube.com/watch?v=${videoId}`,
-        channelLink: `https://www.youtube.com/channel/${cId}`
-      };
-    });
-
-    renderList(results);
-    setStatus(`${results.length} videos found.`, "success");
-  }
-
-  function formatNumber(n) {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-    return String(n);
-  }
-
-  function renderList(results) {
-    const listDiv = document.getElementById('resultsList');
-    const header = document.getElementById('listHeader');
-    const count = document.getElementById('listCount');
-
-    listDiv.innerHTML = '';
-
-    if (results.length === 0) {
-      header.style.display = 'none';
-      return;
-    }
-
-    header.style.display = 'flex';
-    count.textContent = `${results.length} Videos Found`;
-
-    results.forEach(r => {
-      const card = document.createElement('div');
-      card.className = 'result-card';
-
-      const isNewChannel = r.ageDays <= 30;
-
-      card.innerHTML = `
-        <div class="result-top">
-          <div class="plat-badge ${isNewChannel ? 'bg-new' : 'bg-yt'}">${isNewChannel ? 'New Ch' : 'YT'}</div>
-          <div>
-            <div class="result-title">${escapeHtml(r.title)}</div>
-            <div class="result-channel">${escapeHtml(r.channel)}</div>
-          </div>
-        </div>
-        <div class="result-meta">
-          <span>👁️ <b>${formatNumber(r.views)}</b> views</span>
-          <span>👥 <b>${formatNumber(r.subs)}</b> subs</span>
-          <span>📅 Channel age <b>${r.ageDays}d</b></span>
-        </div>
-        <div class="result-actions">
-          <a href="${r.videoLink}" target="_blank" rel="noopener">▶️ Watch</a>
-          <a href="${r.channelLink}" target="_blank" rel="noopener">👤 Channel</a>
-        </div>
-    
+# The full Niche Finder page, base64-encoded so nothing in the HTML/CSS/JS
+# (quotes, backticks, emoji, template literals) can ever break this file's
+# Python syntax. Decoded once at import time.
+_HTML_B64 = (
+    "PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CjxtZXRhIGNoYXJzZXQ9IlVURi04Ij4KPG1ldGEgbmFtZT0i"
+    "dmlld3BvcnQiIGNvbnRlbnQ9IndpZHRoPWRldmljZS13aWR0aCwgaW5pdGlhbC1zY2FsZT0xLjAiPgo8dGl0bGU+TmljaGUgRmlu"
+    "ZGVyPC90aXRsZT4KPHN0eWxlPgogICogeyBtYXJnaW46IDA7IHBhZGRpbmc6IDA7IGJveC1zaXppbmc6IGJvcmRlci1ib3g7IC13"
+    "ZWJraXQtdGFwLWhpZ2hsaWdodC1jb2xvcjogdHJhbnNwYXJlbnQ7IH0KCiAgOnJvb3QgewogICAgLS1nbGFzcy1maWxsOiByZ2Jh"
+    "KDI1NSwgMjU1LCAyNTUsIDAuMDcpOwogICAgLS1nbGFzcy1maWxsLXN0cm9uZzogcmdiYSgyNTUsIDI1NSwgMjU1LCAwLjEyKTsK"
+    "ICAgIC0tZ2xhc3MtYm9yZGVyOiByZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMTQpOwogICAgLS1nbGFzcy1ib3JkZXItc29mdDogcmdi"
+    "YSgyNTUsIDI1NSwgMjU1LCAwLjA3KTsKICAgIC0taW5rOiAjZjVmNWY3OwogICAgLS1pbmstZGltOiByZ2JhKDI0NSwgMjQ1LCAy"
+    "NDcsIDAuNTUpOwogICAgLS1pbmstZmFpbnQ6IHJnYmEoMjQ1LCAyNDUsIDI0NywgMC4zMik7CiAgICAtLWFjY2VudDogIzBhODRm"
+    "ZjsKICAgIC0tYWNjZW50LTI6ICM2NGQyZmY7CiAgICAtLXJhZGl1cy1sZzogMjhweDsKICAgIC0tcmFkaXVzLW1kOiAxOHB4Owog"
+    "ICAgLS1yYWRpdXMtc206IDEycHg7CiAgfQoKICBib2R5IHsKICAgIGJhY2tncm91bmQ6ICMwMzAzMDQ7CiAgICBjb2xvcjogdmFy"
+    "KC0taW5rKTsKICAgIGZvbnQtZmFtaWx5OiAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsICJTRiBQcm8gVGV4dCIs"
+    "ICJTZWdvZSBVSSIsIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZjsKICAgIG1pbi1oZWlnaHQ6IDEwMHZoOwog"
+    "ICAgZGlzcGxheTogZmxleDsKICAgIGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47CiAgICBhbGlnbi1pdGVtczogY2VudGVyOwogICAg"
+    "cGFkZGluZzogNTZweCAyMHB4IDQwcHg7CiAgICBwb3NpdGlvbjogcmVsYXRpdmU7CiAgICBvdmVyZmxvdy14OiBoaWRkZW47CiAg"
+    "fQoKICBib2R5OjpiZWZvcmUsIGJvZHk6OmFmdGVyIHsKICAgIGNvbnRlbnQ6ICcnOwogICAgcG9zaXRpb246IGZpeGVkOwogICAg"
+    "Ym9yZGVyLXJhZGl1czogNTAlOwogICAgZmlsdGVyOiBibHVyKDEzMHB4KTsKICAgIHotaW5kZXg6IC0xOwogICAgb3BhY2l0eTog"
+    "MC40NTsKICAgIGFuaW1hdGlvbjogZHJpZnQgMThzIGluZmluaXRlIGFsdGVybmF0ZSBlYXNlLWluLW91dDsKICB9CiAgYm9keTo6"
+    "YmVmb3JlIHsgdG9wOiAtMTIlOyBsZWZ0OiAtMTQlOyB3aWR0aDogNDZ2dzsgaGVpZ2h0OiA0NnZ3OyBiYWNrZ3JvdW5kOiAjNWU1"
+    "Y2U2OyB9CiAgYm9keTo6YWZ0ZXIgeyBib3R0b206IC0xNCU7IHJpZ2h0OiAtMTIlOyB3aWR0aDogNDJ2dzsgaGVpZ2h0OiA0MnZ3"
+    "OyBiYWNrZ3JvdW5kOiAjYmY1YWYyOyBhbmltYXRpb24tZGVsYXk6IC02czsgfQogIEBrZXlmcmFtZXMgZHJpZnQgeyAwJSB7IHRy"
+    "YW5zZm9ybTogdHJhbnNsYXRlKDAsIDApIHNjYWxlKDEpOyB9IDEwMCUgeyB0cmFuc2Zvcm06IHRyYW5zbGF0ZSg0JSwgNCUpIHNj"
+    "YWxlKDEuMTIpOyB9IH0KCiAgLmJyYW5kIHsgdGV4dC1hbGlnbjogY2VudGVyOyBtYXJnaW4tYm90dG9tOiAyOHB4OyB9CiAgLmJy"
+    "YW5kLW1hcmsgeyBkaXNwbGF5OiBibG9jazsgZm9udC1zaXplOiAzMHB4OyBmb250LXdlaWdodDogNzAwOyBsZXR0ZXItc3BhY2lu"
+    "ZzogLTAuMDJlbTsgY29sb3I6ICNmZmY7IH0KICAuYnJhbmQtc3ViIHsgZGlzcGxheTogYmxvY2s7IG1hcmdpbi10b3A6IDVweDsg"
+    "Zm9udC1zaXplOiAxMnB4OyBmb250LXdlaWdodDogNTAwOyBsZXR0ZXItc3BhY2luZzogMC4xNGVtOyB0ZXh0LXRyYW5zZm9ybTog"
+    "dXBwZXJjYXNlOyBjb2xvcjogdmFyKC0taW5rLWZhaW50KTsgfQoKICAuYm94IHsgd2lkdGg6IDEwMCU7IG1heC13aWR0aDogNjUw"
+    "cHg7IH0KCiAgLmdsYXNzIHsKICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgIGJhY2tncm91bmQ6IHZhcigtLWdsYXNzLWZpbGwp"
+    "OwogICAgLXdlYmtpdC1iYWNrZHJvcC1maWx0ZXI6IGJsdXIoMjhweCkgc2F0dXJhdGUoMTYwJSk7CiAgICBiYWNrZHJvcC1maWx0"
+    "ZXI6IGJsdXIoMjhweCkgc2F0dXJhdGUoMTYwJSk7CiAgICBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1nbGFzcy1ib3JkZXIpOwog"
+    "ICAgYm94LXNoYWRvdzogMCAxcHggMCByZ2JhKDI1NSwyNTUsMjU1LDAuMTQpIGluc2V0LCAwIDIwcHggNTBweCByZ2JhKDAsMCww"
+    "LDAuNDUpOwogIH0KICAuZ2xhc3M6OmJlZm9yZSB7CiAgICBjb250ZW50OiAnJzsKICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTsKICAg"
+    "IGluc2V0OiAwOwogICAgYm9yZGVyLXJhZGl1czogaW5oZXJpdDsKICAgIHBhZGRpbmc6IDFweDsKICAgIGJhY2tncm91bmQ6IGxp"
+    "bmVhci1ncmFkaWVudCgxODBkZWcsIHJnYmEoMjU1LDI1NSwyNTUsMC4zNSksIHJnYmEoMjU1LDI1NSwyNTUsMCkgNDAlKTsKICAg"
+    "IC13ZWJraXQtbWFzazogbGluZWFyLWdyYWRpZW50KCMwMDAgMCAwKSBjb250ZW50LWJveCwgbGluZWFyLWdyYWRpZW50KCMwMDAg"
+    "MCAwKTsKICAgIC13ZWJraXQtbWFzay1jb21wb3NpdGU6IHhvcjsKICAgIG1hc2stY29tcG9zaXRlOiBleGNsdWRlOwogICAgcG9p"
+    "bnRlci1ldmVudHM6IG5vbmU7CiAgfQoKICAuZ2xhc3MtcGFuZWwgeyBib3JkZXItcmFkaXVzOiB2YXIoLS1yYWRpdXMtbGcpOyBw"
+    "YWRkaW5nOiAyNHB4OyBtYXJnaW4tdG9wOiAxNnB4OyB9CgogIC5xdWljay1yb3cgeyBkaXNwbGF5OiBmbGV4OyBhbGlnbi1pdGVt"
+    "czogY2VudGVyOyBnYXA6IDEwcHg7IHdpZHRoOiAxMDAlOyBtYXgtd2lkdGg6IDY1MHB4OyB9CgogIC5waWxsLWdsYXNzIHsKICAg"
+    "IGZsZXg6IDE7CiAgICBkaXNwbGF5OiBmbGV4OwogICAgYWxpZ24taXRlbXM6IGNlbnRlcjsKICAgIGp1c3RpZnktY29udGVudDog"
+    "Y2VudGVyOwogICAgZ2FwOiA4cHg7CiAgICBib3JkZXItcmFkaXVzOiA5OTlweDsKICAgIHBhZGRpbmc6IDEzcHggMjBweDsKICAg"
+    "IGZvbnQtc2l6ZTogMTNweDsKICAgIGZvbnQtd2VpZ2h0OiA2MDA7CiAgICBjb2xvcjogdmFyKC0taW5rLWRpbSk7CiAgICBjdXJz"
+    "b3I6IHBvaW50ZXI7CiAgICB0cmFuc2l0aW9uOiBjb2xvciAwLjJzLCBiYWNrZ3JvdW5kIDAuMnM7CiAgfQogIC5waWxsLWdsYXNz"
+    "OmFjdGl2ZSB7IHRyYW5zZm9ybTogc2NhbGUoMC45Nyk7IH0KICAucGlsbC1nbGFzcy5tb2RlLWFjdGl2ZSB7IGNvbG9yOiAjZmZm"
+    "OyBiYWNrZ3JvdW5kOiB2YXIoLS1hY2NlbnQpICFpbXBvcnRhbnQ7IGJvcmRlci1jb2xvcjogdHJhbnNwYXJlbnQ7IH0KCiAgLmlj"
+    "b24tZ2xhc3MgewogICAgZmxleC1zaHJpbms6IDA7CiAgICB3aWR0aDogNDRweDsKICAgIGhlaWdodDogNDRweDsKICAgIGJvcmRl"
+    "ci1yYWRpdXM6IDUwJTsKICAgIGRpc3BsYXk6IGZsZXg7CiAgICBhbGlnbi1pdGVtczogY2VudGVyOwogICAganVzdGlmeS1jb250"
+    "ZW50OiBjZW50ZXI7CiAgICBjb2xvcjogdmFyKC0taW5rLWRpbSk7CiAgICBjdXJzb3I6IHBvaW50ZXI7CiAgICB0cmFuc2l0aW9u"
+    "OiBjb2xvciAwLjJzLCB0cmFuc2Zvcm0gMC4xNXM7CiAgfQogIC5pY29uLWdsYXNzOmhvdmVyIHsgY29sb3I6ICNmZmY7IH0KICAu"
+    "aWNvbi1nbGFzczphY3RpdmUgeyB0cmFuc2Zvcm06IHNjYWxlKDAuOTIpOyB9CiAgLmljb24tZ2xhc3MuaXMtb3BlbiB7IGNvbG9y"
+    "OiB2YXIoLS1hY2NlbnQtMik7IH0KICAuaWNvbi1nbGFzcyBzdmcgeyB3aWR0aDogMThweDsgaGVpZ2h0OiAxOHB4OyB9CgogIC5z"
+    "ZXR0aW5ncy1wYW5lbCB7CiAgICBkaXNwbGF5OiBub25lOwogICAgYmFja2dyb3VuZDogcmdiYSgwLDAsMCwwLjMyKTsKICAgIGJv"
+    "cmRlci1yYWRpdXM6IHZhcigtLXJhZGl1cy1tZCk7CiAgICBwYWRkaW5nOiAxNnB4OwogICAgbWFyZ2luLWJvdHRvbTogMjBweDsK"
+    "ICAgIGJvcmRlcjogMXB4IHNvbGlkIHZhcigtLWdsYXNzLWJvcmRlci1zb2Z0KTsKICB9CiAgLnNldHRpbmdzLXBhbmVsLWhlYWQg"
+    "ewogICAgZm9udC1zaXplOiAxMXB4OyBmb250LXdlaWdodDogNjAwOyBsZXR0ZXItc3BhY2luZzogMC4wNmVtOyB0ZXh0LXRyYW5z"
+    "Zm9ybTogdXBwZXJjYXNlOwogICAgY29sb3I6IHZhcigtLWluay1kaW0pOyBqdXN0aWZ5LWNvbnRlbnQ6IHNwYWNlLWJldHdlZW47"
+    "IGRpc3BsYXk6IGZsZXg7IG1hcmdpbi1ib3R0b206IDE0cHg7CiAgfQogIC5zZXR0aW5ncy1wYW5lbC1oZWFkIHNwYW46bGFzdC1j"
+    "aGlsZCB7IGNvbG9yOiB2YXIoLS1hY2NlbnQtMik7IGN1cnNvcjogcG9pbnRlcjsgdGV4dC10cmFuc2Zvcm06IG5vbmU7IGxldHRl"
+    "ci1zcGFjaW5nOiAwOyBmb250LXNpemU6IDEycHg7IH0KCiAgLmNvb2tpZS1ncm91cCB7IG1hcmdpbi1ib3R0b206IDEycHg7IH0K"
+    "ICAuY29va2llLWdyb3VwOmxhc3QtY2hpbGQgeyBtYXJnaW4tYm90dG9tOiAwOyB9CiAgLmNvb2tpZS1ncm91cCBsYWJlbCB7IGRp"
+    "c3BsYXk6IGJsb2NrOyBmb250LXNpemU6IDEwcHg7IGZvbnQtd2VpZ2h0OiA2MDA7IGNvbG9yOiB2YXIoLS1pbmstZGltKTsgbWFy"
+    "Z2luLWJvdHRvbTogNnB4OyB0ZXh0LXRyYW5zZm9ybTogdXBwZXJjYXNlOyBsZXR0ZXItc3BhY2luZzogMC4wNmVtOyB9CiAgLnNl"
+    "dHRpbmdzLXBhbmVsIHRleHRhcmVhIHsKICAgIHdpZHRoOiAxMDAlOyBoZWlnaHQ6IDUwcHg7IGJhY2tncm91bmQ6IHJnYmEoMCww"
+    "LDAsMC40KTsgYm9yZGVyOiAxcHggc29saWQgdmFyKC0tZ2xhc3MtYm9yZGVyLXNvZnQpOwogICAgY29sb3I6ICNhMWExYTY7IGZv"
+    "bnQtZmFtaWx5OiB1aS1tb25vc3BhY2UsIFNGTW9uby1SZWd1bGFyLCBNZW5sbywgbW9ub3NwYWNlOyBmb250LXNpemU6IDExcHg7"
+    "CiAgICBwYWRkaW5nOiAxMXB4OyByZXNpemU6IHZlcnRpY2FsOyBvdXRsaW5lOiBub25lOyBib3JkZXItcmFkaXVzOiB2YXIoLS1y"
+    "YWRpdXMtc20pOyB0cmFuc2l0aW9uOiBib3JkZXIgMC4yczsKICB9CiAgLnNldHRpbmdzLXBhbmVsIHRleHRhcmVhOmZvY3VzIHsg"
+    "Ym9yZGVyLWNvbG9yOiByZ2JhKDI1NSwyNTUsMjU1LDAuMyk7IH0KCiAgLnNldHRpbmdzLXBhbmVsIHNlbGVjdCB7CiAgICB3aWR0"
+    "aDogMTAwJTsgYmFja2dyb3VuZDogcmdiYSgwLDAsMCwwLjQpOyBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1nbGFzcy1ib3JkZXIt"
+    "c29mdCk7CiAgICBjb2xvcjogdmFyKC0taW5rKTsgZm9udC1mYW1pbHk6IGluaGVyaXQ7IGZvbnQtc2l6ZTogMTNweDsgZm9udC13"
+    "ZWlnaHQ6IDUwMDsKICAgIHBhZGRpbmc6IDEycHggMTRweDsgb3V0bGluZTogbm9uZTsgYm9yZGVyLXJhZGl1czogdmFyKC0tcmFk"
+    "aXVzLXNtKTsgdHJhbnNpdGlvbjogYm9yZGVyIDAuMnM7CiAgICBhcHBlYXJhbmNlOiBub25lOyAtd2Via2l0LWFwcGVhcmFuY2U6"
+    "IG5vbmU7CiAgICBiYWNrZ3JvdW5kLWltYWdlOiB1cmwoImRhdGE6aW1hZ2Uvc3ZnK3htbDt1dGY4LDxzdmcgeG1sbnM9J2h0dHA6"
+    "Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB3aWR0aD0nMTQnIGhlaWdodD0nMTQnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9u"
+    "ZScgc3Ryb2tlPSclMjNhMWExYTYnIHN0cm9rZS13aWR0aD0nMic+PHBvbHlsaW5lIHBvaW50cz0nNiA5IDEyIDE1IDE4IDknPjwv"
+    "cG9seWxpbmU+PC9zdmc+Iik7CiAgICBiYWNrZ3JvdW5kLXJlcGVhdDogbm8tcmVwZWF0OwogICAgYmFja2dyb3VuZC1wb3NpdGlv"
+    "bjogcmlnaHQgMTJweCBjZW50ZXI7CiAgfQogIC5zZXR0aW5ncy1wYW5lbCBzZWxlY3Q6Zm9jdXMgeyBib3JkZXItY29sb3I6IHJn"
+    "YmEoMjU1LDI1NSwyNTUsMC4zKTsgfQoKICAubWFpbi1pbnB1dCB7CiAgICB3aWR0aDogMTAwJTsgYmFja2dyb3VuZDogcmdiYSgw"
+    "LDAsMCwwLjI4KTsgYm9yZGVyOiAxcHggc29saWQgdmFyKC0tZ2xhc3MtYm9yZGVyLXNvZnQpOwogICAgY29sb3I6IHZhcigtLWlu"
+    "ayk7IHBhZGRpbmc6IDE2cHg7IGZvbnQtZmFtaWx5OiBpbmhlcml0OyBmb250LXNpemU6IDE0cHg7IGxpbmUtaGVpZ2h0OiAxLjU7"
+    "CiAgICBib3JkZXItcmFkaXVzOiB2YXIoLS1yYWRpdXMtbWQpOyBvdXRsaW5lOiBub25lOyBtYXJnaW4tYm90dG9tOiAxNnB4Owog"
+    "ICAgdHJhbnNpdGlvbjogYWxsIDAuMnM7IGJveC1zaGFkb3c6IGluc2V0IDAgMnB4IDZweCByZ2JhKDAsMCwwLDAuMjUpOwogIH0K"
+    "ICAubWFpbi1pbnB1dDpmb2N1cyB7IGJvcmRlci1jb2xvcjogcmdiYSgyNTUsMjU1LDI1NSwwLjI0KTsgYmFja2dyb3VuZDogcmdi"
+    "YSgwLDAsMCwwLjQyKTsgYm94LXNoYWRvdzogMCAwIDAgNHB4IHJnYmEoMTAsMTMyLDI1NSwwLjEyKTsgfQogIC5tYWluLWlucHV0"
+    "OjpwbGFjZWhvbGRlciB7IGNvbG9yOiB2YXIoLS1pbmstZmFpbnQpOyB9CgogIGJ1dHRvbiB7IGJvcmRlcjogbm9uZTsgY3Vyc29y"
+    "OiBwb2ludGVyOyBmb250LWZhbWlseTogaW5oZXJpdDsgdHJhbnNpdGlvbjogYWxsIDAuMTVzOyB9CgogIGJ1dHRvbi5zb2xpZCB7"
+    "CiAgICBiYWNrZ3JvdW5kOiAjZmZmOyBjb2xvcjogIzAwMDsgcGFkZGluZzogMTVweCAyNHB4OyBmb250LXNpemU6IDE0cHg7IGZv"
+    "bnQtd2VpZ2h0OiA2MDA7CiAgICBib3JkZXItcmFkaXVzOiAxNnB4OyB3aWR0aDogMTAwJTsKICB9CiAgYnV0dG9uLnNvbGlkOmhv"
+    "dmVyIHsgb3BhY2l0eTogMC45OyB0cmFuc2Zvcm06IHNjYWxlKDAuOTkpOyB9CiAgYnV0dG9uLnNvbGlkOmFjdGl2ZSB7IHRyYW5z"
+    "Zm9ybTogc2NhbGUoMC45Nyk7IH0KICBidXR0b24uc29saWQ6ZGlzYWJsZWQgeyBvcGFjaXR5OiAwLjM1OyBjdXJzb3I6IG5vdC1h"
+    "bGxvd2VkOyB0cmFuc2Zvcm06IG5vbmU7IH0KCiAgLnN0YXR1cyB7IGZvbnQtc2l6ZTogMTNweDsgZm9udC13ZWlnaHQ6IDUwMDsg"
+    "Y29sb3I6IHZhcigtLWluay1kaW0pOyBtaW4taGVpZ2h0OiAyMHB4OyBtYXJnaW4tdG9wOiAxNnB4OyB0ZXh0LWFsaWduOiBjZW50"
+    "ZXI7IH0KICAuc3RhdHVzLmFjdGl2ZSB7IGNvbG9yOiB2YXIoLS1hY2NlbnQtMik7IH0KICAuc3RhdHVzLmVycm9yIHsgY29sb3I6"
+    "ICNmZjQ1M2E7IH0KICAuc3RhdHVzLnN1Y2Nlc3MgeyBjb2xvcjogIzMyZDc0YjsgfQoKICAubGlzdC1oZWFkZXIgewogICAgZm9u"
+    "dC1zaXplOiAxMXB4OyBmb250LXdlaWdodDogNjAwOyBjb2xvcjogdmFyKC0taW5rLWRpbSk7IHRleHQtdHJhbnNmb3JtOiB1cHBl"
+    "cmNhc2U7IGxldHRlci1zcGFjaW5nOiAwLjA2ZW07CiAgICBtYXJnaW4tdG9wOiAzMnB4OyBtYXJnaW4tYm90dG9tOiAxMnB4OyBk"
+    "aXNwbGF5OiBub25lOyBqdXN0aWZ5LWNvbnRlbnQ6IHNwYWNlLWJldHdlZW47CiAgfQoKICAudXNlci1saXN0IHsgZGlzcGxheTog"
+    "ZmxleDsgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsgZ2FwOiA4cHg7IG1heC1oZWlnaHQ6IDUwMHB4OyBvdmVyZmxvdy15OiBhdXRv"
+    "OyBwYWRkaW5nLXJpZ2h0OiA0cHg7IH0KCiAgLnJlc3VsdC1jYXJkIHsKICAgIGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUs"
+    "MC4wNDUpOyBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1nbGFzcy1ib3JkZXItc29mdCk7IGJvcmRlci1yYWRpdXM6IHZhcigtLXJh"
+    "ZGl1cy1zbSk7CiAgICBwYWRkaW5nOiAxNHB4IDE1cHg7IGRpc3BsYXk6IGZsZXg7IGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47IGdh"
+    "cDogOHB4OwogICAgZm9udC1zaXplOiAxM3B4OyB0cmFuc2l0aW9uOiBiYWNrZ3JvdW5kIDAuMnM7CiAgfQogIC5yZXN1bHQtY2Fy"
+    "ZDpob3ZlciB7IGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUsMC4wODUpOyB9CgogIC5yZXN1bHQtdG9wIHsgZGlzcGxheTog"
+    "ZmxleDsgYWxpZ24taXRlbXM6IGZsZXgtc3RhcnQ7IGdhcDogMTBweDsgfQogIC5wbGF0LWJhZGdlIHsgZm9udC1zaXplOiAxMHB4"
+    "OyBmb250LXdlaWdodDogNzAwOyBwYWRkaW5nOiA0cHggOHB4OyBib3JkZXItcmFkaXVzOiA3cHg7IHRleHQtdHJhbnNmb3JtOiB1"
+    "cHBlcmNhc2U7IGxldHRlci1zcGFjaW5nOiAwLjA1ZW07IHRleHQtYWxpZ246IGNlbnRlcjsgZmxleC1zaHJpbms6IDA7IG1hcmdp"
+    "bi10b3A6IDFweDsgfQogIC5iZy15dCB7IGJhY2tncm91bmQ6IHJnYmEoMjU1LCAwLCAwLCAwLjE1KTsgY29sb3I6ICNmZjQ1M2E7"
+    "IH0KICAuYmctbmV3IHsgYmFja2dyb3VuZDogcmdiYSg1MCwgMjE1LCA3NSwgMC4xNSk7IGNvbG9yOiAjMzJkNzRiOyB9CgogIC5y"
+    "ZXN1bHQtdGl0bGUgeyBjb2xvcjogdmFyKC0taW5rKTsgZm9udC13ZWlnaHQ6IDYwMDsgZm9udC1zaXplOiAxM3B4OyBsaW5lLWhl"
+    "aWdodDogMS40OyBmbGV4OiAxOyB9CiAgLnJlc3VsdC1jaGFubmVsIHsgY29sb3I6IHZhcigtLWluay1kaW0pOyBmb250LXNpemU6"
+    "IDEycHg7IG1hcmdpbi10b3A6IDJweDsgfQoKICAucmVzdWx0LW1ldGEgeyBkaXNwbGF5OiBmbGV4OyBmbGV4LXdyYXA6IHdyYXA7"
+    "IGdhcDogNnB4IDE0cHg7IGZvbnQtc2l6ZTogMTFweDsgY29sb3I6IHZhcigtLWluay1kaW0pOyBwYWRkaW5nLWxlZnQ6IDJweDsg"
+    "fQogIC5yZXN1bHQtbWV0YSBiIHsgY29sb3I6IHZhcigtLWluayk7IGZvbnQtd2VpZ2h0OiA2MDA7IH0KCiAgLnJlc3VsdC1hY3Rp"
+    "b25zIHsgZGlzcGxheTogZmxleDsgZ2FwOiA4cHg7IH0KICAucmVzdWx0LWFjdGlvbnMgYSB7CiAgICBmb250LXNpemU6IDExcHg7"
+    "IGZvbnQtd2VpZ2h0OiA2MDA7IHBhZGRpbmc6IDdweCAxM3B4OyBib3JkZXItcmFkaXVzOiA4cHg7CiAgICBiYWNrZ3JvdW5kOiBy"
+    "Z2JhKDI1NSwyNTUsMjU1LDAuMDgpOyBjb2xvcjogI2ZmZjsgdGV4dC1kZWNvcmF0aW9uOiBub25lOyB0cmFuc2l0aW9uOiBiYWNr"
+    "Z3JvdW5kIDAuMnM7CiAgfQogIC5yZXN1bHQtYWN0aW9ucyBhOmhvdmVyIHsgYmFja2dyb3VuZDogcmdiYSgyNTUsMjU1LDI1NSww"
+    "LjE2KTsgfQoKICA6Oi13ZWJraXQtc2Nyb2xsYmFyIHsgd2lkdGg6IDZweDsgaGVpZ2h0OiA2cHg7IH0KICA6Oi13ZWJraXQtc2Ny"
+    "b2xsYmFyLXRyYWNrIHsgYmFja2dyb3VuZDogdHJhbnNwYXJlbnQ7IH0KICA6Oi13ZWJraXQtc2Nyb2xsYmFyLXRodW1iIHsgYmFj"
+    "a2dyb3VuZDogcmdiYSgyNTUsMjU1LDI1NSwwLjIpOyBib3JkZXItcmFkaXVzOiAxMHB4OyB9CiAgOjotd2Via2l0LXNjcm9sbGJh"
+    "ci10aHVtYjpob3ZlciB7IGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUsMC4zKTsgfQoKICBAbWVkaWEgKHByZWZlcnMtcmVk"
+    "dWNlZC1tb3Rpb246IHJlZHVjZSkgewogICAgYm9keTo6YmVmb3JlLCBib2R5OjphZnRlciB7IGFuaW1hdGlvbjogbm9uZTsgfQog"
+    "IH0KCiAgQG1lZGlhIChtYXgtd2lkdGg6IDQ4MHB4KSB7CiAgICBib2R5IHsgcGFkZGluZzogNDBweCAxNHB4IDMycHg7IH0KICAg"
+    "IC5icmFuZC1tYXJrIHsgZm9udC1zaXplOiAyNnB4OyB9CiAgICAuZ2xhc3MtcGFuZWwgeyBwYWRkaW5nOiAxOHB4OyB9CiAgfQo8"
+    "L3N0eWxlPgo8L2hlYWQ+Cjxib2R5PgoKPGRpdiBjbGFzcz0iYnJhbmQiPgogIDxzcGFuIGNsYXNzPSJicmFuZC1tYXJrIj5OaWNo"
+    "ZSBGaW5kZXI8L3NwYW4+CiAgPHNwYW4gY2xhc3M9ImJyYW5kLXN1YiI+WW91VHViZSBFeHBsb3Npb24gRW5naW5lPC9zcGFuPgo8"
+    "L2Rpdj4KCjxkaXYgY2xhc3M9InF1aWNrLXJvdyI+CiAgPGRpdiBjbGFzcz0icGlsbC1nbGFzcyBnbGFzcyBtb2RlLWFjdGl2ZSIg"
+    "aWQ9Im1vZGVUcmVuZGluZ0J0biIgb25jbGljaz0ic2V0TW9kZSgndHJlbmRpbmcnKSI+4pqhIFRyZW5kaW5nIE5vdzwvZGl2Pgog"
+    "IDxkaXYgY2xhc3M9InBpbGwtZ2xhc3MgZ2xhc3MiIGlkPSJtb2RlS2V5d29yZEJ0biIgb25jbGljaz0ic2V0TW9kZSgna2V5d29y"
+    "ZCcpIj7wn5SNIEtleXdvcmQgRXhwbG9zaW9uPC9kaXY+CiAgPGRpdiBjbGFzcz0iaWNvbi1nbGFzcyBnbGFzcyIgaWQ9InNldHRp"
+    "bmdzQnRuIiBvbmNsaWNrPSJ0b2dnbGVTZXR0aW5ncygpIiB0aXRsZT0iU2V0dGluZ3MiIHJvbGU9ImJ1dHRvbiIgYXJpYS1sYWJl"
+    "bD0iU2V0dGluZ3MiIGFyaWEtZXhwYW5kZWQ9ImZhbHNlIj4KICAgIDxzdmcgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25l"
+    "IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5l"
+    "am9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiPjwvY2lyY2xlPjxwYXRoIGQ9Ik0xOS40IDE1YTEuNjUg"
+    "MS42NSAwIDAgMCAuMzMgMS44MmwuMDYuMDZhMiAyIDAgMCAxIDAgMi44MyAyIDIgMCAwIDEtMi44MyAwbC0uMDYtLjA2YTEuNjUg"
+    "MS42NSAwIDAgMC0xLjgyLS4zMyAxLjY1IDEuNjUgMCAwIDAtMSAxLjUxVjIxYTIgMiAwIDAgMS0yIDIgMiAyIDAgMCAxLTItMnYt"
+    "LjA5QTEuNjUgMS42NSAwIDAgMCA5IDE5LjRhMS42NSAxLjY1IDAgMCAwLTEuODIuMzNsLS4wNi4wNmEyIDIgMCAwIDEtMi44MyAw"
+    "IDIgMiAwIDAgMSAwLTIuODNsLjA2LS4wNmExLjY1IDEuNjUgMCAwIDAgLjMzLTEuODIgMS42NSAxLjY1IDAgMCAwLTEuNTEtMUgz"
+    "YTIgMiAwIDAgMS0yLTIgMiAyIDAgMCAxIDItMmguMDlBMS42NSAxLjY1IDAgMCAwIDQuNiA5YTEuNjUgMS42NSAwIDAgMC0uMzMt"
+    "MS44MmwtLjA2LS4wNmEyIDIgMCAwIDEgMC0yLjgzIDIgMiAwIDAgMSAyLjgzIDBsLjA2LjA2YTEuNjUgMS42NSAwIDAgMCAxLjgy"
+    "LjMzSDlhMS42NSAxLjY1IDAgMCAwIDEtMS41MVYzYTIgMiAwIDAgMSAyLTIgMiAyIDAgMCAxIDIgMnYuMDlhMS42NSAxLjY1IDAg"
+    "MCAwIDEgMS41MSAxLjY1IDEuNjUgMCAwIDAgMS44Mi0uMzNsLjA2LS4wNmEyIDIgMCAwIDEgMi44MyAwIDIgMiAwIDAgMSAwIDIu"
+    "ODNsLS4wNi4wNmExLjY1IDEuNjUgMCAwIDAtLjMzIDEuODJWOWExLjY1IDEuNjUgMCAwIDAgMS41MSAxSDIxYTIgMiAwIDAgMSAy"
+    "IDIgMiAyIDAgMCAxLTIgMmgtLjA5YTEuNjUgMS42NSAwIDAgMC0xLjUxIDF6Ij48L3BhdGg+PC9zdmc+CiAgPC9kaXY+CjwvZGl2"
+    "PgoKPGRpdiBjbGFzcz0iYm94Ij4KCiAgPGRpdiBjbGFzcz0iZ2xhc3MtcGFuZWwgZ2xhc3MiPgogICAgPGRpdiBjbGFzcz0ic2V0"
+    "dGluZ3MtcGFuZWwiIGlkPSJzZXR0aW5nc1BhbmVsIj4KICAgICAgPGRpdiBjbGFzcz0ic2V0dGluZ3MtcGFuZWwtaGVhZCI+CiAg"
+    "ICAgICAgPHNwYW4+QVBJICZhbXA7IFNlYXJjaCBTZXR0aW5nczwvc3Bhbj4KICAgICAgICA8c3BhbiBvbmNsaWNrPSJzYXZlU2V0"
+    "dGluZ3MoKSI+U2F2ZSBTZXR0aW5nczwvc3Bhbj4KICAgICAgPC9kaXY+CgogICAgICA8ZGl2IGNsYXNzPSJjb29raWUtZ3JvdXAi"
+    "PgogICAgICAgIDxsYWJlbD5Zb3VUdWJlIEFQSSB2MyBLZXk8L2xhYmVsPgogICAgICAgIDx0ZXh0YXJlYSBpZD0ieXRBcGlLZXki"
+    "IHBsYWNlaG9sZGVyPSJBSXphU3kuLi4iPjwvdGV4dGFyZWE+CiAgICAgIDwvZGl2PgoKICAgICAgPGRpdiBjbGFzcz0iY29va2ll"
+    "LWdyb3VwIj4KICAgICAgICA8bGFiZWw+VGltZSBQZXJpb2Q8L2xhYmVsPgogICAgICAgIDxzZWxlY3QgaWQ9InBlcmlvZFNlbGVj"
+    "dCI+CiAgICAgICAgICA8b3B0aW9uIHZhbHVlPSIxIj5MYXN0IDI0IEhvdXJzPC9vcHRpb24+CiAgICAgICAgICA8b3B0aW9uIHZh"
+    "bHVlPSI3IiBzZWxlY3RlZD5MYXN0IDcgRGF5czwvb3B0aW9uPgogICAgICAgICAgPG9wdGlvbiB2YWx1ZT0iMzAiPkxhc3QgMzAg"
+    "RGF5czwvb3B0aW9uPgogICAgICAgIDwvc2VsZWN0PgogICAgICA8L2Rpdj4KCiAgICAgIDxkaXYgY2xhc3M9ImNvb2tpZS1ncm91"
+    "cCI+CiAgICAgICAgPGxhYmVsPk51bWJlciBvZiBSZXN1bHRzPC9sYWJlbD4KICAgICAgICA8c2VsZWN0IGlkPSJtYXhSZXN1bHRz"
+    "U2VsZWN0Ij4KICAgICAgICAgIDxvcHRpb24gdmFsdWU9IjEwIj4xMDwvb3B0aW9uPgogICAgICAgICAgPG9wdGlvbiB2YWx1ZT0i"
+    "MjAiIHNlbGVjdGVkPjIwPC9vcHRpb24+CiAgICAgICAgICA8b3B0aW9uIHZhbHVlPSIzMCI+MzA8L29wdGlvbj4KICAgICAgICAg"
+    "IDxvcHRpb24gdmFsdWU9IjQwIj40MDwvb3B0aW9uPgogICAgICAgICAgPG9wdGlvbiB2YWx1ZT0iNTAiPjUwPC9vcHRpb24+CiAg"
+    "ICAgICAgPC9zZWxlY3Q+CiAgICAgIDwvZGl2PgogICAgPC9kaXY+CgogICAgPGlucHV0IHR5cGU9InRleHQiIGlkPSJrZXl3b3Jk"
+    "SW5wdXQiIGNsYXNzPSJtYWluLWlucHV0IiBwbGFjZWhvbGRlcj0iZS5nLiBtaW5lY3JhZnQgc3BlZWRydW4sIHRydWUgY3JpbWUs"
+    "IGJ1ZGdldCB0cmF2ZWwiPgoKICAgIDxidXR0b24gY2xhc3M9InNvbGlkIiBpZD0iYWN0aW9uQnRuIiBvbmNsaWNrPSJydW5TZWFy"
+    "Y2goKSI+UmVmcmVzaCBUcmVuZGluZzwvYnV0dG9uPgoKICAgIDxkaXYgY2xhc3M9InN0YXR1cyIgaWQ9Im1haW5TdGF0dXMiPlJl"
+    "YWR5IHRvIHNlYXJjaC48L2Rpdj4KCiAgICA8ZGl2IGNsYXNzPSJsaXN0LWhlYWRlciIgaWQ9Imxpc3RIZWFkZXIiPgogICAgICA8"
+    "c3BhbiBpZD0ibGlzdENvdW50Ij4wIFZpZGVvcyBGb3VuZDwvc3Bhbj4KICAgIDwvZGl2PgogICAgPGRpdiBjbGFzcz0idXNlci1s"
+    "aXN0IiBpZD0icmVzdWx0c0xpc3QiPjwvZGl2PgogIDwvZGl2Pgo8L2Rpdj4KCjxzY3JpcHQ+CiAgY29uc3QgQVBJX0JBU0UgPSAn"
+    "aHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20veW91dHViZS92Myc7CiAgbGV0IG1vZGUgPSAndHJlbmRpbmcnOyAvLyAndHJlbmRp"
+    "bmcnIHwgJ2tleXdvcmQnCgogIGRvY3VtZW50LmFkZEV2ZW50TGlzdGVuZXIoIkRPTUNvbnRlbnRMb2FkZWQiLCAoKSA9PiB7CiAg"
+    "ICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgieXRBcGlLZXkiKS52YWx1ZSA9IGxvY2FsU3RvcmFnZS5nZXRJdGVtKCJ5dF9hcGlf"
+    "a2V5IikgfHwgIiI7CiAgICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgicGVyaW9kU2VsZWN0IikudmFsdWUgPSBsb2NhbFN0b3Jh"
+    "Z2UuZ2V0SXRlbSgieXRfcGVyaW9kIikgfHwgIjciOwogICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1heFJlc3VsdHNTZWxl"
+    "Y3QiKS52YWx1ZSA9IGxvY2FsU3RvcmFnZS5nZXRJdGVtKCJ5dF9tYXhfcmVzdWx0cyIpIHx8ICIyMCI7CiAgICB1cGRhdGVNb2Rl"
+    "VUkoKTsKICB9KTsKCiAgZnVuY3Rpb24gdG9nZ2xlU2V0dGluZ3MoKSB7CiAgICBjb25zdCBwYW5lbCA9IGRvY3VtZW50LmdldEVs"
+    "ZW1lbnRCeUlkKCJzZXR0aW5nc1BhbmVsIik7CiAgICBjb25zdCBidG4gPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgic2V0dGlu"
+    "Z3NCdG4iKTsKICAgIGNvbnN0IGlzT3BlbiA9IHBhbmVsLnN0eWxlLmRpc3BsYXkgPT09ICJibG9jayI7CiAgICBwYW5lbC5zdHls"
+    "ZS5kaXNwbGF5ID0gaXNPcGVuID8gIm5vbmUiIDogImJsb2NrIjsKICAgIGJ0bi5jbGFzc0xpc3QudG9nZ2xlKCJpcy1vcGVuIiwg"
+    "IWlzT3Blbik7CiAgICBidG4uc2V0QXR0cmlidXRlKCJhcmlhLWV4cGFuZGVkIiwgU3RyaW5nKCFpc09wZW4pKTsKICB9CgogIGZ1"
+    "bmN0aW9uIHNhdmVTZXR0aW5ncygpIHsKICAgIGxvY2FsU3RvcmFnZS5zZXRJdGVtKCJ5dF9hcGlfa2V5IiwgZG9jdW1lbnQuZ2V0"
+    "RWxlbWVudEJ5SWQoInl0QXBpS2V5IikudmFsdWUudHJpbSgpKTsKICAgIGxvY2FsU3RvcmFnZS5zZXRJdGVtKCJ5dF9wZXJpb2Qi"
+    "LCBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgicGVyaW9kU2VsZWN0IikudmFsdWUpOwogICAgbG9jYWxTdG9yYWdlLnNldEl0ZW0o"
+    "Inl0X21heF9yZXN1bHRzIiwgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1heFJlc3VsdHNTZWxlY3QiKS52YWx1ZSk7CiAgICBz"
+    "ZXRTdGF0dXMoIlNldHRpbmdzIHNhdmVkLiIsICJzdWNjZXNzIik7CiAgICB0b2dnbGVTZXR0aW5ncygpOwogIH0KCiAgZnVuY3Rp"
+    "b24gZ2V0QXBpS2V5KCkgewogICAgcmV0dXJuIGxvY2FsU3RvcmFnZS5nZXRJdGVtKCJ5dF9hcGlfa2V5IikgfHwgZG9jdW1lbnQu"
+    "Z2V0RWxlbWVudEJ5SWQoInl0QXBpS2V5IikudmFsdWUudHJpbSgpOwogIH0KCiAgZnVuY3Rpb24gc2V0TW9kZShuZXdNb2RlKSB7"
+    "CiAgICBtb2RlID0gbmV3TW9kZTsKICAgIHVwZGF0ZU1vZGVVSSgpOwogIH0KCiAgZnVuY3Rpb24gdXBkYXRlTW9kZVVJKCkgewog"
+    "ICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1vZGVUcmVuZGluZ0J0biIpLmNsYXNzTGlzdC50b2dnbGUoIm1vZGUtYWN0aXZl"
+    "IiwgbW9kZSA
