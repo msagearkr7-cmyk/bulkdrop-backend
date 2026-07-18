@@ -14,9 +14,7 @@ CORS(app, origins="*")
 def home():
     return "BulkDrop & Niche Engine Running"
 
-# ==========================================
-# 1. DOWNLOADER API
-# ==========================================
+# --- 1. MULTI-PLATFORM DOWNLOADER ---
 @app.route('/download', methods=['POST'])
 def download():
     data = request.json or {}
@@ -91,10 +89,7 @@ def download():
             except: pass
         return jsonify({'error': str(e)}), 500
 
-
-# ==========================================
-# 2. NICHE FINDER API
-# ==========================================
+# --- 2. YOUTUBE NICHE FINDER ---
 @app.route('/youtube-niche', methods=['POST'])
 def youtube_niche():
     data = request.json or {}
@@ -110,7 +105,6 @@ def youtube_niche():
         youtube = build('youtube', 'v3', developerKey=api_key)
         after_date = (datetime.now(timezone.utc) - timedelta(days=period)).isoformat()
         
-        # 1. Search for videos
         search_res = youtube.search().list(
             q=query, part="snippet", type="video", order="viewCount", 
             publishedAfter=after_date, maxResults=max_results
@@ -121,21 +115,13 @@ def youtube_niche():
         if not v_ids:
             return jsonify({'results': []})
         
-        # 2. Get Video Statistics
-        video_stats_res = youtube.videos().list(
-            part="snippet,statistics", id=",".join(v_ids)
-        ).execute()
-        
+        video_stats_res = youtube.videos().list(part="snippet,statistics", id=",".join(v_ids)).execute()
         video_items = video_stats_res.get('items', [])
-        channel_ids = [item['snippet']['channelId'] for item in video_items]
         
-        # 3. Get Channel Statistics
-        channels_res = youtube.channels().list(
-            part="snippet,statistics", id=",".join(channel_ids)
-        ).execute()
+        channel_ids = [item['snippet']['channelId'] for item in video_items]
+        channels_res = youtube.channels().list(part="snippet,statistics", id=",".join(channel_ids)).execute()
         channels = {item['id']: item for item in channels_res.get('items', [])}
         
-        # 4. Process Data
         results = []
         for item in video_items:
             c_id = item['snippet']['channelId']
@@ -161,3 +147,4 @@ def youtube_niche():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+    
