@@ -8,15 +8,13 @@ from datetime import datetime, timezone, timedelta
 st.set_page_config(page_title="Niche Finder Intelligence", layout="wide", page_icon="🔥")
 
 # --- APPLE-GLASS DESIGN SYSTEM ---------------------------------------------
-# Same token system as the BulkDrop Pro reference (dark canvas, drifting
-# blurred color fields, frosted glass panels, pill buttons, soft badges),
-# ported onto Streamlit's DOM via data-testid selectors + a few custom
-# HTML blocks for elements Streamlit doesn't expose (badges, brand header).
+# Matches the BulkDrop Pro reference 1:1: dark canvas, drifting blurred color
+# fields, one seamless frosted glass panel holding everything (no sidebar,
+# no nested boxes), pill buttons, and a small gear popover for auth setup.
 st.markdown("""
 <style>
   :root {
     --glass-fill: rgba(255, 255, 255, 0.07);
-    --glass-fill-strong: rgba(255, 255, 255, 0.12);
     --glass-border: rgba(255, 255, 255, 0.14);
     --glass-border-soft: rgba(255, 255, 255, 0.07);
     --ink: #f5f5f7;
@@ -28,6 +26,9 @@ st.markdown("""
     --radius-md: 18px;
     --radius-sm: 12px;
   }
+
+  /* Hide the sidebar entirely — auth now lives in the gear popover */
+  section[data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none !important; }
 
   html, body, [data-testid="stAppViewContainer"] {
     background: #030304 !important;
@@ -57,36 +58,59 @@ st.markdown("""
     [data-testid="stAppViewContainer"]::before, [data-testid="stAppViewContainer"]::after { animation: none; }
   }
 
-  .block-container { position: relative; z-index: 1; padding-top: 2.5rem; max-width: 900px; }
+  .block-container { position: relative; z-index: 1; padding-top: 2.5rem; max-width: 700px; }
 
   /* ---- Brand header ---- */
-  .brand-wrap { text-align: center; margin-bottom: 8px; }
+  .brand-wrap { text-align: center; margin-bottom: 20px; }
   .brand-mark { display: block; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
   .brand-sub { display: block; margin-top: 5px; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
 
-  /* ---- Glass panels (expander, containers, tabs body) ---- */
-  [data-testid="stExpander"],
-  div[data-testid="stVerticalBlockBorderWrapper"] {
+  /* ---- Quick row (gear / auth button) ---- */
+  .quick-row-spacer { display: flex; justify-content: flex-end; margin-bottom: -6px; }
+
+  /* Popover trigger -> small pill-glass button, same as reference .icon-glass/.pill-glass */
+  [data-testid="stPopover"] > div > button {
+    background: var(--glass-fill) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid var(--glass-border) !important;
+    color: var(--ink-dim) !important;
+    border-radius: 999px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    padding: 8px 16px !important;
+    min-height: 36px !important;
+    width: auto !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 8px 20px rgba(0,0,0,0.35);
+  }
+  [data-testid="stPopover"] > div > button:hover { color: #fff !important; }
+  [data-testid="stPopoverBody"] {
+    background: #0a0a0d !important;
+    border: 1px solid var(--glass-border-soft) !important;
+    border-radius: var(--radius-md) !important;
+    -webkit-backdrop-filter: blur(28px);
+    backdrop-filter: blur(28px);
+  }
+
+  /* ---- The ONE glass panel that holds everything below the header ---- */
+  div[data-testid="stVerticalBlockBorderWrapper"]:has(> div > div[data-testid="stVerticalBlock"] > div[data-testid="stTabs"]) {
     background: var(--glass-fill) !important;
     -webkit-backdrop-filter: blur(28px) saturate(160%);
     backdrop-filter: blur(28px) saturate(160%);
     border: 1px solid var(--glass-border) !important;
     border-radius: var(--radius-lg) !important;
     box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 50px rgba(0,0,0,0.45);
+    padding: 8px;
   }
-  [data-testid="stExpander"] summary { color: var(--ink) !important; font-weight: 600; }
-  [data-testid="stExpander"] svg { fill: var(--ink-dim) !important; }
 
   /* ---- Tabs styled as pill toggles ---- */
   [data-testid="stTabs"] [role="tablist"] {
     gap: 10px;
     border-bottom: none !important;
-    background: var(--glass-fill);
-    border: 1px solid var(--glass-border);
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--glass-border-soft);
     border-radius: 999px;
     padding: 6px;
-    -webkit-backdrop-filter: blur(20px);
-    backdrop-filter: blur(20px);
   }
   [data-testid="stTabs"] [role="tab"] {
     border-radius: 999px !important;
@@ -95,10 +119,7 @@ st.markdown("""
     font-size: 13px;
     padding: 10px 18px !important;
   }
-  [data-testid="stTabs"] [aria-selected="true"] {
-    background: var(--accent) !important;
-    color: #fff !important;
-  }
+  [data-testid="stTabs"] [aria-selected="true"] { background: var(--accent) !important; color: #fff !important; }
   [data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none; }
 
   /* ---- Inputs ---- */
@@ -114,53 +135,34 @@ st.markdown("""
     box-shadow: 0 0 0 4px rgba(10,132,255,0.12) !important;
   }
   ::placeholder { color: var(--ink-faint) !important; }
-  label, .stMarkdown p, [data-testid="stWidgetLabel"] p { color: var(--ink-dim) !important; }
-
+  label, .stMarkdown p, [data-testid="stWidgetLabel"] p, [data-testid="stCaptionContainer"] { color: var(--ink-dim) !important; }
   div[data-baseweb="select"] > div { min-height: 44px; background: rgba(0,0,0,0.28) !important; border-radius: var(--radius-sm) !important; }
 
-  /* ---- Segmented control -> pill row ---- */
+  /* ---- Segmented control ---- */
   div[data-testid="stSegmentedControl"] { background: rgba(0,0,0,0.32); border-radius: 999px; padding: 5px; border: 1px solid var(--glass-border-soft); }
-  div[data-testid="stSegmentedControl"] label {
-    min-height: 40px; font-size: 13px; font-weight: 600; border-radius: 999px !important; color: var(--ink-dim) !important;
-  }
+  div[data-testid="stSegmentedControl"] label { min-height: 40px; font-size: 13px; font-weight: 600; border-radius: 999px !important; color: var(--ink-dim) !important; }
 
   /* ---- Buttons ---- */
   .stButton > button, .stDownloadButton > button {
-    min-height: 48px;
-    font-size: 14px;
-    font-weight: 600;
-    border-radius: 16px;
-    width: 100%;
-    background: var(--accent) !important;
-    color: #fff !important;
-    border: none !important;
-    transition: all 0.15s;
+    min-height: 48px; font-size: 14px; font-weight: 600; border-radius: 16px; width: 100%;
+    background: var(--accent) !important; color: #fff !important; border: none !important; transition: all 0.15s;
   }
   .stButton > button:hover { background: #0074e0 !important; }
   .stButton > button:active { transform: scale(0.97); }
 
-  /* ---- Sidebar ---- */
-  section[data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.03) !important;
-    border-right: 1px solid var(--glass-border-soft);
-  }
-  section[data-testid="stSidebar"] input { min-height: 44px; }
-
-  /* ---- Dataframe ---- */
+  /* ---- Dataframe / table, living inside the same panel ---- */
   [data-testid="stDataFrame"], [data-testid="stDataFrameResizable"] {
     touch-action: pan-x pan-y !important;
     -webkit-overflow-scrolling: touch !important;
     border-radius: var(--radius-md) !important;
     overflow: hidden;
     border: 1px solid var(--glass-border-soft) !important;
+    background: rgba(0,0,0,0.22) !important;
   }
   [data-testid="stDataFrame"] div[role="grid"] { touch-action: pan-x pan-y !important; }
 
-  /* ---- Status badges (custom html) ---- */
-  .status-badge {
-    display: inline-block; font-size: 11px; font-weight: 600; padding: 5px 12px;
-    border-radius: 999px; letter-spacing: 0.02em;
-  }
+  /* ---- Status badges ---- */
+  .status-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 999px; letter-spacing: 0.02em; margin-bottom: 10px; }
   .badge-live { color: var(--accent-2); background: rgba(100, 210, 255, 0.15); }
   .badge-idle { color: var(--ink-dim); background: rgba(255,255,255,0.08); }
 
@@ -179,17 +181,32 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR: API KEY ---
-st.sidebar.header("Configuration")
-api_key_input = st.sidebar.text_input("Enter YouTube API v3 Key", type="password")
-
 # --- SESSION STATE ---
+if 'api_key' not in st.session_state:
+    st.session_state.api_key = ""
 if 'youtube' not in st.session_state:
     st.session_state.youtube = None
 if 'df_trend' not in st.session_state:
     st.session_state.df_trend = None
 if 'df_search' not in st.session_state:
     st.session_state.df_search = None
+
+# --- SMALL "AUTHENTICATION SETUP" GEAR BUTTON (replaces sidebar) ---
+st.markdown('<div class="quick-row-spacer">', unsafe_allow_html=True)
+with st.popover("⚙️ Authentication Setup"):
+    st.caption("YOUTUBE API v3 KEY")
+    key_input = st.text_input(
+        "API key",
+        value=st.session_state.api_key,
+        type="password",
+        placeholder="AIzaSy...",
+        label_visibility="collapsed",
+    )
+    if st.button("Save Settings", key="save_key_btn"):
+        st.session_state.api_key = key_input.strip()
+        st.session_state.youtube = None  # force reconnect with the new key
+        st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 # --- HELPER FUNCTIONS (unchanged logic) ---
 def connect_to_youtube(key):
@@ -267,26 +284,19 @@ def display_responsive_table(df):
         height=height
     )
 
-def status_pill(connected: bool):
-    if connected:
-        st.markdown('<span class="status-badge badge-live">● Connected</span>', unsafe_allow_html=True)
-    else:
-        st.markdown('<span class="status-badge badge-idle">Awaiting key</span>', unsafe_allow_html=True)
-
-# --- APP LOGIC ---
-if api_key_input:
+# --- CONNECT ---
+if st.session_state.api_key:
     if st.session_state.youtube is None:
-        st.session_state.youtube = connect_to_youtube(api_key_input)
+        st.session_state.youtube = connect_to_youtube(st.session_state.api_key)
 else:
-    with st.container(border=True):
-        status_pill(False)
-        st.info("👋 Enter your API key in the sidebar to begin.")
+    st.markdown('<span class="status-badge badge-idle">Awaiting key — tap "Authentication Setup" above</span>', unsafe_allow_html=True)
     st.stop()
 
+# --- MAIN GLASS PANEL: tabs + tables all live together, no separate boxes ---
 if st.session_state.youtube:
-    with st.container(border=True):
-        status_pill(True)
+    st.markdown('<span class="status-badge badge-live">● Connected</span>', unsafe_allow_html=True)
 
+    with st.container(border=True):
         tab1, tab2 = st.tabs(["⚡ Trending Now", "🔍 Keyword Explosion"])
 
         with tab1:
@@ -353,3 +363,4 @@ if st.session_state.youtube:
 
             if st.session_state.df_search is not None and not st.session_state.df_search.empty:
                 display_responsive_table(st.session_state.df_search)
+              
