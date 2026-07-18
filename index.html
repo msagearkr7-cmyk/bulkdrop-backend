@@ -33,7 +33,7 @@
   body::after { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #bf5af2; animation-delay: -5s; }
   @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 5%) scale(1.1); } }
 
-  .logo { font-size: 13px; font-weight: 500; letter-spacing: 0.1em; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 24px; text-align: center; }
+  .logo { font-size: 13px; font-weight: 500; letter-spacing: 0.1em; color: rgba(255,255,255,0.6); text-transform: uppercase; margin-bottom: 32px; text-align: center; }
   .logo span { color: #fff; font-size: 28px; font-weight: 700; display: block; letter-spacing: 0; margin-bottom: 4px; }
   
   .box { width: 100%; max-width: 650px; }
@@ -48,29 +48,8 @@
     box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
-  /* Global Button Style */
-  button { background: #fff; color: #000; border: none; padding: 14px 24px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 14px; transition: all 0.2s; width: 100%; font-family: inherit; -webkit-tap-highlight-color: transparent; }
-  button:hover { transform: scale(0.98); opacity: 0.9; }
-  button:active { transform: scale(0.96); }
-  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-  
-  .btn-accent { background: #0a84ff; color: #fff; } 
-  .btn-accent:hover { background: #007aff; }
-
-  /* FIX: Native Button Overrides for Settings Toggles so mobile doesn't ignore taps */
-  button.settings-toggle { 
-    background: transparent; border: none; padding: 0; width: 100%; margin-bottom: 16px;
-    font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.5); cursor: pointer; 
-    display: flex; justify-content: flex-end; align-items: center; gap: 6px; transition: color 0.2s; 
-  }
-  button.settings-toggle:hover { color: #fff; transform: none; opacity: 1; }
-  
-  button.save-text-btn {
-    background: transparent; border: none; padding: 0; width: auto; margin: 0;
-    color: #0a84ff; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;
-  }
-  button.save-text-btn:hover { transform: none; opacity: 0.8; }
-
+  .settings-toggle { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.5); cursor: pointer; text-align: right; margin-bottom: 16px; transition: color 0.2s; display: flex; justify-content: flex-end; align-items: center; gap: 6px;}
+  .settings-toggle:hover { color: #fff; }
   .settings-panel { display: none; background: rgba(0,0,0,0.3); border-radius: 16px; padding: 16px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); }
   
   .cookie-group { margin-bottom: 12px; }
@@ -81,6 +60,14 @@
   .main-input { width: 100%; height: 160px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.1); color: #f5f5f7; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 14px; border-radius: 16px; outline: none; resize: vertical; margin-bottom: 16px; transition: all 0.2s; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);}
   .main-input:focus { border-color: rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); box-shadow: 0 0 0 4px rgba(255,255,255,0.05); }
   .main-input::placeholder { color: rgba(255,255,255,0.3); }
+
+  button { background: #fff; color: #000; border: none; padding: 14px 24px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 14px; transition: all 0.2s; width: 100%; font-family: inherit;}
+  button:hover { transform: scale(0.98); opacity: 0.9; }
+  button:active { transform: scale(0.96); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  
+  .btn-accent { background: #0a84ff; color: #fff; } 
+  .btn-accent:hover { background: #007aff; }
 
   .status { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.5); min-height: 20px; margin-top: 16px; text-align: center; }
   .status.active { color: #0a84ff; }
@@ -118,34 +105,31 @@
 
 <div class="logo"><span>BulkDrop Pro</span>Multi-Platform Engine</div>
 
-<!-- LAUNCH APP.PY BUTTON -->
+<!-- ADDITION 1: Launch app.py link (using a simple styled div to prevent button conflicts) -->
 <div style="display: flex; justify-content: center; margin-bottom: 24px; width: 100%; max-width: 650px;">
-  <button style="background: rgba(255, 255, 255, 0.1); color: #fff; width: auto; padding: 10px 20px; font-size: 12px; border-radius: 12px;" onclick="window.open('https://your-streamlit-app-url.com', '_blank')">
+  <div style="background: rgba(255, 255, 255, 0.1); color: #fff; padding: 12px 24px; font-size: 13px; font-weight: 600; border-radius: 14px; cursor: pointer; text-align: center;" onclick="window.open('https://your-streamlit-app-url.com', '_blank')">
     🔍 Launch Niche Finder Intelligence
-  </button>
+  </div>
 </div>
 
 <div class="box">
   
   <div class="glass-panel">
-    
-    <!-- FIX: Native button tag replacing the div -->
-    <button class="settings-toggle" onclick="toggleSettings()">
+    <div class="settings-toggle" onclick="toggleSettings()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       Authentication Setup
-    </button>
+    </div>
     
     <div class="settings-panel" id="settingsPanel">
       <div style="font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.8); justify-content: space-between; display: flex; margin-bottom: 12px;">
         <span>Platform Cookies Setup:</span>
-        <!-- FIX: Native button tag replacing the span -->
-        <button class="save-text-btn" onclick="saveCookies()">Save Settings</button>
+        <span style="color: #0a84ff; cursor:pointer;" onclick="saveCookies()">Save Settings</span>
       </div>
       
-      <!-- NEW: YouTube API Key save field -->
+      <!-- ADDITION 2: YouTube API Key Field -->
       <div class="cookie-group">
         <label>YouTube API v3 Key</label>
-        <textarea id="ytApiKey" style="height: 40px; min-height: 40px;" placeholder="AIzaSy..."></textarea>
+        <textarea id="ytApiKey" style="height: 50px;" placeholder="AIzaSy..."></textarea>
       </div>
 
       <div class="cookie-group">
@@ -190,17 +174,14 @@
   const BACKEND = 'https://bulkdrop-backend.onrender.com'; 
   let pendingUrls = [];
 
-  // SAFELY LOAD SAVED DATA (Protected block so mobile storage limits won't break the code)
   document.addEventListener("DOMContentLoaded", () => {
-    try {
-      document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
-      document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
-      document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
-      document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
-      document.getElementById("cookiesYt").value = localStorage.getItem("yt_cookies") || "";
-    } catch (e) {
-      console.warn("Local storage loading blocked.");
-    }
+    // ADDITION 3: Load the saved API key
+    document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
+    
+    document.getElementById("cookiesIg").value = localStorage.getItem("ig_cookies") || "";
+    document.getElementById("cookiesTt").value = localStorage.getItem("tt_cookies") || "";
+    document.getElementById("cookiesFb").value = localStorage.getItem("fb_cookies") || "";
+    document.getElementById("cookiesYt").value = localStorage.getItem("yt_cookies") || "";
   });
 
   function toggleSettings() {
@@ -209,17 +190,15 @@
   }
 
   function saveCookies() {
-    try {
-      localStorage.setItem("yt_api_key", document.getElementById("ytApiKey").value.trim());
-      localStorage.setItem("ig_cookies", document.getElementById("cookiesIg").value.trim());
-      localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
-      localStorage.setItem("fb_cookies", document.getElementById("cookiesFb").value.trim());
-      localStorage.setItem("yt_cookies", document.getElementById("cookiesYt").value.trim());
-    } catch (e) {
-      console.warn("Local storage saving blocked.");
-    }
+    // ADDITION 4: Save the API key
+    localStorage.setItem("yt_api_key", document.getElementById("ytApiKey").value.trim());
     
-    setStatus("Settings cached securely in browser.", "success");
+    localStorage.setItem("ig_cookies", document.getElementById("cookiesIg").value.trim());
+    localStorage.setItem("tt_cookies", document.getElementById("cookiesTt").value.trim());
+    localStorage.setItem("fb_cookies", document.getElementById("cookiesFb").value.trim());
+    localStorage.setItem("yt_cookies", document.getElementById("cookiesYt").value.trim());
+    
+    setStatus("Cookies cached securely in browser.", "success");
     toggleSettings();
   }
 
@@ -306,12 +285,15 @@
     updateItemStatus(item.id, 'Extracting', 'status-working');
     
     let targetCookies = "";
-    try {
-        if (item.platform.name === 'Instagram') targetCookies = localStorage.getItem("ig_cookies") || "";
-        if (item.platform.name === 'TikTok') targetCookies = localStorage.getItem("tt_cookies") || "";
-        if (item.platform.name === 'Facebook') targetCookies = localStorage.getItem("fb_cookies") || "";
-        if (item.platform.name === 'YouTube') targetCookies = localStorage.getItem("yt_cookies") || "";
-    } catch(e) {}
+    if (item.platform.name === 'Instagram') {
+        targetCookies = localStorage.getItem("ig_cookies") || "";
+    } else if (item.platform.name === 'TikTok') {
+        targetCookies = localStorage.getItem("tt_cookies") || "";
+    } else if (item.platform.name === 'Facebook') {
+        targetCookies = localStorage.getItem("fb_cookies") || "";
+    } else if (item.platform.name === 'YouTube') {
+        targetCookies = localStorage.getItem("yt_cookies") || "";
+    }
 
     const isProxyPlatform = item.platform.name === 'TikTok' || item.platform.name === 'Facebook' || item.platform.name === 'Instagram';
     
@@ -328,18 +310,22 @@
       }
 
       if (isProxyPlatform) {
+        // TIKTOK, FACEBOOK & INSTAGRAM MODE: Read the raw binary stream directly into memory
         const blob = await res.blob();
         
+        // Create an invisible link to force the phone to save the file
         const blobUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
         
+        // Add a unique timestamp to ensure the filename is never duplicated
         const uniqueString = Date.now(); 
         a.download = `${item.platform.name.toLowerCase()}_${uniqueString}.mp4`;
         
         document.body.appendChild(a);
         a.click();
         
+        // Clean up memory
         a.remove();
         URL.revokeObjectURL(blobUrl);
         
@@ -347,6 +333,7 @@
         return true;
         
       } else {
+        // YOUTUBE MODE: Open the URL in a new tab normally
         const data = await res.json();
         if (data.url) {
             updateItemStatus(item.id, 'Completed', 'status-done');
