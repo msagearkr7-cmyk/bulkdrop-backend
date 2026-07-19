@@ -1,194 +1,228 @@
-import base64
-from flask import Flask, render_template_string
+import streamlit as st
+import pandas as pd
+from googleapiclient.discovery import build
+from dateutil import parser
+from datetime import datetime, timezone, timedelta
 
-app = Flask(__name__)
+# --- PAGE SETUP ---
+st.set_page_config(page_title="YT Explosion Finder", layout="wide")
 
-# The full Niche Finder page, base64-encoded so nothing in the HTML/CSS/JS
-# (quotes, backticks, emoji, template literals) can ever break this file's
-# Python syntax. Decoded once at import time.
-_HTML_B64 = (
-    "PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CjxtZXRhIGNoYXJzZXQ9IlVURi04Ij4KPG1ldGEgbmFtZT0i"
-    "dmlld3BvcnQiIGNvbnRlbnQ9IndpZHRoPWRldmljZS13aWR0aCwgaW5pdGlhbC1zY2FsZT0xLjAiPgo8dGl0bGU+TmljaGUgRmlu"
-    "ZGVyPC90aXRsZT4KPHN0eWxlPgogICogeyBtYXJnaW46IDA7IHBhZGRpbmc6IDA7IGJveC1zaXppbmc6IGJvcmRlci1ib3g7IC13"
-    "ZWJraXQtdGFwLWhpZ2hsaWdodC1jb2xvcjogdHJhbnNwYXJlbnQ7IH0KCiAgOnJvb3QgewogICAgLS1nbGFzcy1maWxsOiByZ2Jh"
-    "KDI1NSwgMjU1LCAyNTUsIDAuMDcpOwogICAgLS1nbGFzcy1maWxsLXN0cm9uZzogcmdiYSgyNTUsIDI1NSwgMjU1LCAwLjEyKTsK"
-    "ICAgIC0tZ2xhc3MtYm9yZGVyOiByZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMTQpOwogICAgLS1nbGFzcy1ib3JkZXItc29mdDogcmdi"
-    "YSgyNTUsIDI1NSwgMjU1LCAwLjA3KTsKICAgIC0taW5rOiAjZjVmNWY3OwogICAgLS1pbmstZGltOiByZ2JhKDI0NSwgMjQ1LCAy"
-    "NDcsIDAuNTUpOwogICAgLS1pbmstZmFpbnQ6IHJnYmEoMjQ1LCAyNDUsIDI0NywgMC4zMik7CiAgICAtLWFjY2VudDogIzBhODRm"
-    "ZjsKICAgIC0tYWNjZW50LTI6ICM2NGQyZmY7CiAgICAtLXJhZGl1cy1sZzogMjhweDsKICAgIC0tcmFkaXVzLW1kOiAxOHB4Owog"
-    "ICAgLS1yYWRpdXMtc206IDEycHg7CiAgfQoKICBib2R5IHsKICAgIGJhY2tncm91bmQ6ICMwMzAzMDQ7CiAgICBjb2xvcjogdmFy"
-    "KC0taW5rKTsKICAgIGZvbnQtZmFtaWx5OiAtYXBwbGUtc3lzdGVtLCBCbGlua01hY1N5c3RlbUZvbnQsICJTRiBQcm8gVGV4dCIs"
-    "ICJTZWdvZSBVSSIsIFJvYm90bywgSGVsdmV0aWNhLCBBcmlhbCwgc2Fucy1zZXJpZjsKICAgIG1pbi1oZWlnaHQ6IDEwMHZoOwog"
-    "ICAgZGlzcGxheTogZmxleDsKICAgIGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47CiAgICBhbGlnbi1pdGVtczogY2VudGVyOwogICAg"
-    "cGFkZGluZzogNTZweCAyMHB4IDQwcHg7CiAgICBwb3NpdGlvbjogcmVsYXRpdmU7CiAgICBvdmVyZmxvdy14OiBoaWRkZW47CiAg"
-    "fQoKICBib2R5OjpiZWZvcmUsIGJvZHk6OmFmdGVyIHsKICAgIGNvbnRlbnQ6ICcnOwogICAgcG9zaXRpb246IGZpeGVkOwogICAg"
-    "Ym9yZGVyLXJhZGl1czogNTAlOwogICAgZmlsdGVyOiBibHVyKDEzMHB4KTsKICAgIHotaW5kZXg6IC0xOwogICAgb3BhY2l0eTog"
-    "MC40NTsKICAgIGFuaW1hdGlvbjogZHJpZnQgMThzIGluZmluaXRlIGFsdGVybmF0ZSBlYXNlLWluLW91dDsKICB9CiAgYm9keTo6"
-    "YmVmb3JlIHsgdG9wOiAtMTIlOyBsZWZ0OiAtMTQlOyB3aWR0aDogNDZ2dzsgaGVpZ2h0OiA0NnZ3OyBiYWNrZ3JvdW5kOiAjNWU1"
-    "Y2U2OyB9CiAgYm9keTo6YWZ0ZXIgeyBib3R0b206IC0xNCU7IHJpZ2h0OiAtMTIlOyB3aWR0aDogNDJ2dzsgaGVpZ2h0OiA0MnZ3"
-    "OyBiYWNrZ3JvdW5kOiAjYmY1YWYyOyBhbmltYXRpb24tZGVsYXk6IC02czsgfQogIEBrZXlmcmFtZXMgZHJpZnQgeyAwJSB7IHRy"
-    "YW5zZm9ybTogdHJhbnNsYXRlKDAsIDApIHNjYWxlKDEpOyB9IDEwMCUgeyB0cmFuc2Zvcm06IHRyYW5zbGF0ZSg0JSwgNCUpIHNj"
-    "YWxlKDEuMTIpOyB9IH0KCiAgLmJyYW5kIHsgdGV4dC1hbGlnbjogY2VudGVyOyBtYXJnaW4tYm90dG9tOiAyOHB4OyB9CiAgLmJy"
-    "YW5kLW1hcmsgeyBkaXNwbGF5OiBibG9jazsgZm9udC1zaXplOiAzMHB4OyBmb250LXdlaWdodDogNzAwOyBsZXR0ZXItc3BhY2lu"
-    "ZzogLTAuMDJlbTsgY29sb3I6ICNmZmY7IH0KICAuYnJhbmQtc3ViIHsgZGlzcGxheTogYmxvY2s7IG1hcmdpbi10b3A6IDVweDsg"
-    "Zm9udC1zaXplOiAxMnB4OyBmb250LXdlaWdodDogNTAwOyBsZXR0ZXItc3BhY2luZzogMC4xNGVtOyB0ZXh0LXRyYW5zZm9ybTog"
-    "dXBwZXJjYXNlOyBjb2xvcjogdmFyKC0taW5rLWZhaW50KTsgfQoKICAuYm94IHsgd2lkdGg6IDEwMCU7IG1heC13aWR0aDogNjUw"
-    "cHg7IH0KCiAgLmdsYXNzIHsKICAgIHBvc2l0aW9uOiByZWxhdGl2ZTsKICAgIGJhY2tncm91bmQ6IHZhcigtLWdsYXNzLWZpbGwp"
-    "OwogICAgLXdlYmtpdC1iYWNrZHJvcC1maWx0ZXI6IGJsdXIoMjhweCkgc2F0dXJhdGUoMTYwJSk7CiAgICBiYWNrZHJvcC1maWx0"
-    "ZXI6IGJsdXIoMjhweCkgc2F0dXJhdGUoMTYwJSk7CiAgICBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1nbGFzcy1ib3JkZXIpOwog"
-    "ICAgYm94LXNoYWRvdzogMCAxcHggMCByZ2JhKDI1NSwyNTUsMjU1LDAuMTQpIGluc2V0LCAwIDIwcHggNTBweCByZ2JhKDAsMCww"
-    "LDAuNDUpOwogIH0KICAuZ2xhc3M6OmJlZm9yZSB7CiAgICBjb250ZW50OiAnJzsKICAgIHBvc2l0aW9uOiBhYnNvbHV0ZTsKICAg"
-    "IGluc2V0OiAwOwogICAgYm9yZGVyLXJhZGl1czogaW5oZXJpdDsKICAgIHBhZGRpbmc6IDFweDsKICAgIGJhY2tncm91bmQ6IGxp"
-    "bmVhci1ncmFkaWVudCgxODBkZWcsIHJnYmEoMjU1LDI1NSwyNTUsMC4zNSksIHJnYmEoMjU1LDI1NSwyNTUsMCkgNDAlKTsKICAg"
-    "IC13ZWJraXQtbWFzazogbGluZWFyLWdyYWRpZW50KCMwMDAgMCAwKSBjb250ZW50LWJveCwgbGluZWFyLWdyYWRpZW50KCMwMDAg"
-    "MCAwKTsKICAgIC13ZWJraXQtbWFzay1jb21wb3NpdGU6IHhvcjsKICAgIG1hc2stY29tcG9zaXRlOiBleGNsdWRlOwogICAgcG9p"
-    "bnRlci1ldmVudHM6IG5vbmU7CiAgfQoKICAuZ2xhc3MtcGFuZWwgeyBib3JkZXItcmFkaXVzOiB2YXIoLS1yYWRpdXMtbGcpOyBw"
-    "YWRkaW5nOiAyNHB4OyBtYXJnaW4tdG9wOiAxNnB4OyB9CgogIC5xdWljay1yb3cgeyBkaXNwbGF5OiBmbGV4OyBhbGlnbi1pdGVt"
-    "czogY2VudGVyOyBnYXA6IDEwcHg7IHdpZHRoOiAxMDAlOyBtYXgtd2lkdGg6IDY1MHB4OyB9CgogIC5waWxsLWdsYXNzIHsKICAg"
-    "IGZsZXg6IDE7CiAgICBkaXNwbGF5OiBmbGV4OwogICAgYWxpZ24taXRlbXM6IGNlbnRlcjsKICAgIGp1c3RpZnktY29udGVudDog"
-    "Y2VudGVyOwogICAgZ2FwOiA4cHg7CiAgICBib3JkZXItcmFkaXVzOiA5OTlweDsKICAgIHBhZGRpbmc6IDEzcHggMjBweDsKICAg"
-    "IGZvbnQtc2l6ZTogMTNweDsKICAgIGZvbnQtd2VpZ2h0OiA2MDA7CiAgICBjb2xvcjogdmFyKC0taW5rLWRpbSk7CiAgICBjdXJz"
-    "b3I6IHBvaW50ZXI7CiAgICB0cmFuc2l0aW9uOiBjb2xvciAwLjJzLCBiYWNrZ3JvdW5kIDAuMnM7CiAgfQogIC5waWxsLWdsYXNz"
-    "OmFjdGl2ZSB7IHRyYW5zZm9ybTogc2NhbGUoMC45Nyk7IH0KICAucGlsbC1nbGFzcy5tb2RlLWFjdGl2ZSB7IGNvbG9yOiAjZmZm"
-    "OyBiYWNrZ3JvdW5kOiB2YXIoLS1hY2NlbnQpICFpbXBvcnRhbnQ7IGJvcmRlci1jb2xvcjogdHJhbnNwYXJlbnQ7IH0KCiAgLmlj"
-    "b24tZ2xhc3MgewogICAgZmxleC1zaHJpbms6IDA7CiAgICB3aWR0aDogNDRweDsKICAgIGhlaWdodDogNDRweDsKICAgIGJvcmRl"
-    "ci1yYWRpdXM6IDUwJTsKICAgIGRpc3BsYXk6IGZsZXg7CiAgICBhbGlnbi1pdGVtczogY2VudGVyOwogICAganVzdGlmeS1jb250"
-    "ZW50OiBjZW50ZXI7CiAgICBjb2xvcjogdmFyKC0taW5rLWRpbSk7CiAgICBjdXJzb3I6IHBvaW50ZXI7CiAgICB0cmFuc2l0aW9u"
-    "OiBjb2xvciAwLjJzLCB0cmFuc2Zvcm0gMC4xNXM7CiAgfQogIC5pY29uLWdsYXNzOmhvdmVyIHsgY29sb3I6ICNmZmY7IH0KICAu"
-    "aWNvbi1nbGFzczphY3RpdmUgeyB0cmFuc2Zvcm06IHNjYWxlKDAuOTIpOyB9CiAgLmljb24tZ2xhc3MuaXMtb3BlbiB7IGNvbG9y"
-    "OiB2YXIoLS1hY2NlbnQtMik7IH0KICAuaWNvbi1nbGFzcyBzdmcgeyB3aWR0aDogMThweDsgaGVpZ2h0OiAxOHB4OyB9CgogIC5z"
-    "ZXR0aW5ncy1wYW5lbCB7CiAgICBkaXNwbGF5OiBub25lOwogICAgYmFja2dyb3VuZDogcmdiYSgwLDAsMCwwLjMyKTsKICAgIGJv"
-    "cmRlci1yYWRpdXM6IHZhcigtLXJhZGl1cy1tZCk7CiAgICBwYWRkaW5nOiAxNnB4OwogICAgbWFyZ2luLWJvdHRvbTogMjBweDsK"
-    "ICAgIGJvcmRlcjogMXB4IHNvbGlkIHZhcigtLWdsYXNzLWJvcmRlci1zb2Z0KTsKICB9CiAgLnNldHRpbmdzLXBhbmVsLWhlYWQg"
-    "ewogICAgZm9udC1zaXplOiAxMXB4OyBmb250LXdlaWdodDogNjAwOyBsZXR0ZXItc3BhY2luZzogMC4wNmVtOyB0ZXh0LXRyYW5z"
-    "Zm9ybTogdXBwZXJjYXNlOwogICAgY29sb3I6IHZhcigtLWluay1kaW0pOyBqdXN0aWZ5LWNvbnRlbnQ6IHNwYWNlLWJldHdlZW47"
-    "IGRpc3BsYXk6IGZsZXg7IG1hcmdpbi1ib3R0b206IDE0cHg7CiAgfQogIC5zZXR0aW5ncy1wYW5lbC1oZWFkIHNwYW46bGFzdC1j"
-    "aGlsZCB7IGNvbG9yOiB2YXIoLS1hY2NlbnQtMik7IGN1cnNvcjogcG9pbnRlcjsgdGV4dC10cmFuc2Zvcm06IG5vbmU7IGxldHRl"
-    "ci1zcGFjaW5nOiAwOyBmb250LXNpemU6IDEycHg7IH0KCiAgLmNvb2tpZS1ncm91cCB7IG1hcmdpbi1ib3R0b206IDEycHg7IH0K"
-    "ICAuY29va2llLWdyb3VwOmxhc3QtY2hpbGQgeyBtYXJnaW4tYm90dG9tOiAwOyB9CiAgLmNvb2tpZS1ncm91cCBsYWJlbCB7IGRp"
-    "c3BsYXk6IGJsb2NrOyBmb250LXNpemU6IDEwcHg7IGZvbnQtd2VpZ2h0OiA2MDA7IGNvbG9yOiB2YXIoLS1pbmstZGltKTsgbWFy"
-    "Z2luLWJvdHRvbTogNnB4OyB0ZXh0LXRyYW5zZm9ybTogdXBwZXJjYXNlOyBsZXR0ZXItc3BhY2luZzogMC4wNmVtOyB9CiAgLnNl"
-    "dHRpbmdzLXBhbmVsIHRleHRhcmVhIHsKICAgIHdpZHRoOiAxMDAlOyBoZWlnaHQ6IDUwcHg7IGJhY2tncm91bmQ6IHJnYmEoMCww"
-    "LDAsMC40KTsgYm9yZGVyOiAxcHggc29saWQgdmFyKC0tZ2xhc3MtYm9yZGVyLXNvZnQpOwogICAgY29sb3I6ICNhMWExYTY7IGZv"
-    "bnQtZmFtaWx5OiB1aS1tb25vc3BhY2UsIFNGTW9uby1SZWd1bGFyLCBNZW5sbywgbW9ub3NwYWNlOyBmb250LXNpemU6IDExcHg7"
-    "CiAgICBwYWRkaW5nOiAxMXB4OyByZXNpemU6IHZlcnRpY2FsOyBvdXRsaW5lOiBub25lOyBib3JkZXItcmFkaXVzOiB2YXIoLS1y"
-    "YWRpdXMtc20pOyB0cmFuc2l0aW9uOiBib3JkZXIgMC4yczsKICB9CiAgLnNldHRpbmdzLXBhbmVsIHRleHRhcmVhOmZvY3VzIHsg"
-    "Ym9yZGVyLWNvbG9yOiByZ2JhKDI1NSwyNTUsMjU1LDAuMyk7IH0KCiAgLnNldHRpbmdzLXBhbmVsIHNlbGVjdCB7CiAgICB3aWR0"
-    "aDogMTAwJTsgYmFja2dyb3VuZDogcmdiYSgwLDAsMCwwLjQpOyBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1nbGFzcy1ib3JkZXIt"
-    "c29mdCk7CiAgICBjb2xvcjogdmFyKC0taW5rKTsgZm9udC1mYW1pbHk6IGluaGVyaXQ7IGZvbnQtc2l6ZTogMTNweDsgZm9udC13"
-    "ZWlnaHQ6IDUwMDsKICAgIHBhZGRpbmc6IDEycHggMTRweDsgb3V0bGluZTogbm9uZTsgYm9yZGVyLXJhZGl1czogdmFyKC0tcmFk"
-    "aXVzLXNtKTsgdHJhbnNpdGlvbjogYm9yZGVyIDAuMnM7CiAgICBhcHBlYXJhbmNlOiBub25lOyAtd2Via2l0LWFwcGVhcmFuY2U6"
-    "IG5vbmU7CiAgICBiYWNrZ3JvdW5kLWltYWdlOiB1cmwoImRhdGE6aW1hZ2Uvc3ZnK3htbDt1dGY4LDxzdmcgeG1sbnM9J2h0dHA6"
-    "Ly93d3cudzMub3JnLzIwMDAvc3ZnJyB3aWR0aD0nMTQnIGhlaWdodD0nMTQnIHZpZXdCb3g9JzAgMCAyNCAyNCcgZmlsbD0nbm9u"
-    "ZScgc3Ryb2tlPSclMjNhMWExYTYnIHN0cm9rZS13aWR0aD0nMic+PHBvbHlsaW5lIHBvaW50cz0nNiA5IDEyIDE1IDE4IDknPjwv"
-    "cG9seWxpbmU+PC9zdmc+Iik7CiAgICBiYWNrZ3JvdW5kLXJlcGVhdDogbm8tcmVwZWF0OwogICAgYmFja2dyb3VuZC1wb3NpdGlv"
-    "bjogcmlnaHQgMTJweCBjZW50ZXI7CiAgfQogIC5zZXR0aW5ncy1wYW5lbCBzZWxlY3Q6Zm9jdXMgeyBib3JkZXItY29sb3I6IHJn"
-    "YmEoMjU1LDI1NSwyNTUsMC4zKTsgfQoKICAubWFpbi1pbnB1dCB7CiAgICB3aWR0aDogMTAwJTsgYmFja2dyb3VuZDogcmdiYSgw"
-    "LDAsMCwwLjI4KTsgYm9yZGVyOiAxcHggc29saWQgdmFyKC0tZ2xhc3MtYm9yZGVyLXNvZnQpOwogICAgY29sb3I6IHZhcigtLWlu"
-    "ayk7IHBhZGRpbmc6IDE2cHg7IGZvbnQtZmFtaWx5OiBpbmhlcml0OyBmb250LXNpemU6IDE0cHg7IGxpbmUtaGVpZ2h0OiAxLjU7"
-    "CiAgICBib3JkZXItcmFkaXVzOiB2YXIoLS1yYWRpdXMtbWQpOyBvdXRsaW5lOiBub25lOyBtYXJnaW4tYm90dG9tOiAxNnB4Owog"
-    "ICAgdHJhbnNpdGlvbjogYWxsIDAuMnM7IGJveC1zaGFkb3c6IGluc2V0IDAgMnB4IDZweCByZ2JhKDAsMCwwLDAuMjUpOwogIH0K"
-    "ICAubWFpbi1pbnB1dDpmb2N1cyB7IGJvcmRlci1jb2xvcjogcmdiYSgyNTUsMjU1LDI1NSwwLjI0KTsgYmFja2dyb3VuZDogcmdi"
-    "YSgwLDAsMCwwLjQyKTsgYm94LXNoYWRvdzogMCAwIDAgNHB4IHJnYmEoMTAsMTMyLDI1NSwwLjEyKTsgfQogIC5tYWluLWlucHV0"
-    "OjpwbGFjZWhvbGRlciB7IGNvbG9yOiB2YXIoLS1pbmstZmFpbnQpOyB9CgogIGJ1dHRvbiB7IGJvcmRlcjogbm9uZTsgY3Vyc29y"
-    "OiBwb2ludGVyOyBmb250LWZhbWlseTogaW5oZXJpdDsgdHJhbnNpdGlvbjogYWxsIDAuMTVzOyB9CgogIGJ1dHRvbi5zb2xpZCB7"
-    "CiAgICBiYWNrZ3JvdW5kOiAjZmZmOyBjb2xvcjogIzAwMDsgcGFkZGluZzogMTVweCAyNHB4OyBmb250LXNpemU6IDE0cHg7IGZv"
-    "bnQtd2VpZ2h0OiA2MDA7CiAgICBib3JkZXItcmFkaXVzOiAxNnB4OyB3aWR0aDogMTAwJTsKICB9CiAgYnV0dG9uLnNvbGlkOmhv"
-    "dmVyIHsgb3BhY2l0eTogMC45OyB0cmFuc2Zvcm06IHNjYWxlKDAuOTkpOyB9CiAgYnV0dG9uLnNvbGlkOmFjdGl2ZSB7IHRyYW5z"
-    "Zm9ybTogc2NhbGUoMC45Nyk7IH0KICBidXR0b24uc29saWQ6ZGlzYWJsZWQgeyBvcGFjaXR5OiAwLjM1OyBjdXJzb3I6IG5vdC1h"
-    "bGxvd2VkOyB0cmFuc2Zvcm06IG5vbmU7IH0KCiAgLnN0YXR1cyB7IGZvbnQtc2l6ZTogMTNweDsgZm9udC13ZWlnaHQ6IDUwMDsg"
-    "Y29sb3I6IHZhcigtLWluay1kaW0pOyBtaW4taGVpZ2h0OiAyMHB4OyBtYXJnaW4tdG9wOiAxNnB4OyB0ZXh0LWFsaWduOiBjZW50"
-    "ZXI7IH0KICAuc3RhdHVzLmFjdGl2ZSB7IGNvbG9yOiB2YXIoLS1hY2NlbnQtMik7IH0KICAuc3RhdHVzLmVycm9yIHsgY29sb3I6"
-    "ICNmZjQ1M2E7IH0KICAuc3RhdHVzLnN1Y2Nlc3MgeyBjb2xvcjogIzMyZDc0YjsgfQoKICAubGlzdC1oZWFkZXIgewogICAgZm9u"
-    "dC1zaXplOiAxMXB4OyBmb250LXdlaWdodDogNjAwOyBjb2xvcjogdmFyKC0taW5rLWRpbSk7IHRleHQtdHJhbnNmb3JtOiB1cHBl"
-    "cmNhc2U7IGxldHRlci1zcGFjaW5nOiAwLjA2ZW07CiAgICBtYXJnaW4tdG9wOiAzMnB4OyBtYXJnaW4tYm90dG9tOiAxMnB4OyBk"
-    "aXNwbGF5OiBub25lOyBqdXN0aWZ5LWNvbnRlbnQ6IHNwYWNlLWJldHdlZW47CiAgfQoKICAudXNlci1saXN0IHsgZGlzcGxheTog"
-    "ZmxleDsgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsgZ2FwOiA4cHg7IG1heC1oZWlnaHQ6IDUwMHB4OyBvdmVyZmxvdy15OiBhdXRv"
-    "OyBwYWRkaW5nLXJpZ2h0OiA0cHg7IH0KCiAgLnJlc3VsdC1jYXJkIHsKICAgIGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUs"
-    "MC4wNDUpOyBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1nbGFzcy1ib3JkZXItc29mdCk7IGJvcmRlci1yYWRpdXM6IHZhcigtLXJh"
-    "ZGl1cy1zbSk7CiAgICBwYWRkaW5nOiAxNHB4IDE1cHg7IGRpc3BsYXk6IGZsZXg7IGZsZXgtZGlyZWN0aW9uOiBjb2x1bW47IGdh"
-    "cDogOHB4OwogICAgZm9udC1zaXplOiAxM3B4OyB0cmFuc2l0aW9uOiBiYWNrZ3JvdW5kIDAuMnM7CiAgfQogIC5yZXN1bHQtY2Fy"
-    "ZDpob3ZlciB7IGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUsMC4wODUpOyB9CgogIC5yZXN1bHQtdG9wIHsgZGlzcGxheTog"
-    "ZmxleDsgYWxpZ24taXRlbXM6IGZsZXgtc3RhcnQ7IGdhcDogMTBweDsgfQogIC5wbGF0LWJhZGdlIHsgZm9udC1zaXplOiAxMHB4"
-    "OyBmb250LXdlaWdodDogNzAwOyBwYWRkaW5nOiA0cHggOHB4OyBib3JkZXItcmFkaXVzOiA3cHg7IHRleHQtdHJhbnNmb3JtOiB1"
-    "cHBlcmNhc2U7IGxldHRlci1zcGFjaW5nOiAwLjA1ZW07IHRleHQtYWxpZ246IGNlbnRlcjsgZmxleC1zaHJpbms6IDA7IG1hcmdp"
-    "bi10b3A6IDFweDsgfQogIC5iZy15dCB7IGJhY2tncm91bmQ6IHJnYmEoMjU1LCAwLCAwLCAwLjE1KTsgY29sb3I6ICNmZjQ1M2E7"
-    "IH0KICAuYmctbmV3IHsgYmFja2dyb3VuZDogcmdiYSg1MCwgMjE1LCA3NSwgMC4xNSk7IGNvbG9yOiAjMzJkNzRiOyB9CgogIC5y"
-    "ZXN1bHQtdGl0bGUgeyBjb2xvcjogdmFyKC0taW5rKTsgZm9udC13ZWlnaHQ6IDYwMDsgZm9udC1zaXplOiAxM3B4OyBsaW5lLWhl"
-    "aWdodDogMS40OyBmbGV4OiAxOyB9CiAgLnJlc3VsdC1jaGFubmVsIHsgY29sb3I6IHZhcigtLWluay1kaW0pOyBmb250LXNpemU6"
-    "IDEycHg7IG1hcmdpbi10b3A6IDJweDsgfQoKICAucmVzdWx0LW1ldGEgeyBkaXNwbGF5OiBmbGV4OyBmbGV4LXdyYXA6IHdyYXA7"
-    "IGdhcDogNnB4IDE0cHg7IGZvbnQtc2l6ZTogMTFweDsgY29sb3I6IHZhcigtLWluay1kaW0pOyBwYWRkaW5nLWxlZnQ6IDJweDsg"
-    "fQogIC5yZXN1bHQtbWV0YSBiIHsgY29sb3I6IHZhcigtLWluayk7IGZvbnQtd2VpZ2h0OiA2MDA7IH0KCiAgLnJlc3VsdC1hY3Rp"
-    "b25zIHsgZGlzcGxheTogZmxleDsgZ2FwOiA4cHg7IH0KICAucmVzdWx0LWFjdGlvbnMgYSB7CiAgICBmb250LXNpemU6IDExcHg7"
-    "IGZvbnQtd2VpZ2h0OiA2MDA7IHBhZGRpbmc6IDdweCAxM3B4OyBib3JkZXItcmFkaXVzOiA4cHg7CiAgICBiYWNrZ3JvdW5kOiBy"
-    "Z2JhKDI1NSwyNTUsMjU1LDAuMDgpOyBjb2xvcjogI2ZmZjsgdGV4dC1kZWNvcmF0aW9uOiBub25lOyB0cmFuc2l0aW9uOiBiYWNr"
-    "Z3JvdW5kIDAuMnM7CiAgfQogIC5yZXN1bHQtYWN0aW9ucyBhOmhvdmVyIHsgYmFja2dyb3VuZDogcmdiYSgyNTUsMjU1LDI1NSww"
-    "LjE2KTsgfQoKICA6Oi13ZWJraXQtc2Nyb2xsYmFyIHsgd2lkdGg6IDZweDsgaGVpZ2h0OiA2cHg7IH0KICA6Oi13ZWJraXQtc2Ny"
-    "b2xsYmFyLXRyYWNrIHsgYmFja2dyb3VuZDogdHJhbnNwYXJlbnQ7IH0KICA6Oi13ZWJraXQtc2Nyb2xsYmFyLXRodW1iIHsgYmFj"
-    "a2dyb3VuZDogcmdiYSgyNTUsMjU1LDI1NSwwLjIpOyBib3JkZXItcmFkaXVzOiAxMHB4OyB9CiAgOjotd2Via2l0LXNjcm9sbGJh"
-    "ci10aHVtYjpob3ZlciB7IGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUsMC4zKTsgfQoKICBAbWVkaWEgKHByZWZlcnMtcmVk"
-    "dWNlZC1tb3Rpb246IHJlZHVjZSkgewogICAgYm9keTo6YmVmb3JlLCBib2R5OjphZnRlciB7IGFuaW1hdGlvbjogbm9uZTsgfQog"
-    "IH0KCiAgQG1lZGlhIChtYXgtd2lkdGg6IDQ4MHB4KSB7CiAgICBib2R5IHsgcGFkZGluZzogNDBweCAxNHB4IDMycHg7IH0KICAg"
-    "IC5icmFuZC1tYXJrIHsgZm9udC1zaXplOiAyNnB4OyB9CiAgICAuZ2xhc3MtcGFuZWwgeyBwYWRkaW5nOiAxOHB4OyB9CiAgfQo8"
-    "L3N0eWxlPgo8L2hlYWQ+Cjxib2R5PgoKPGRpdiBjbGFzcz0iYnJhbmQiPgogIDxzcGFuIGNsYXNzPSJicmFuZC1tYXJrIj5OaWNo"
-    "ZSBGaW5kZXI8L3NwYW4+CiAgPHNwYW4gY2xhc3M9ImJyYW5kLXN1YiI+WW91VHViZSBFeHBsb3Npb24gRW5naW5lPC9zcGFuPgo8"
-    "L2Rpdj4KCjxkaXYgY2xhc3M9InF1aWNrLXJvdyI+CiAgPGRpdiBjbGFzcz0icGlsbC1nbGFzcyBnbGFzcyBtb2RlLWFjdGl2ZSIg"
-    "aWQ9Im1vZGVUcmVuZGluZ0J0biIgb25jbGljaz0ic2V0TW9kZSgndHJlbmRpbmcnKSI+4pqhIFRyZW5kaW5nIE5vdzwvZGl2Pgog"
-    "IDxkaXYgY2xhc3M9InBpbGwtZ2xhc3MgZ2xhc3MiIGlkPSJtb2RlS2V5d29yZEJ0biIgb25jbGljaz0ic2V0TW9kZSgna2V5d29y"
-    "ZCcpIj7wn5SNIEtleXdvcmQgRXhwbG9zaW9uPC9kaXY+CiAgPGRpdiBjbGFzcz0iaWNvbi1nbGFzcyBnbGFzcyIgaWQ9InNldHRp"
-    "bmdzQnRuIiBvbmNsaWNrPSJ0b2dnbGVTZXR0aW5ncygpIiB0aXRsZT0iU2V0dGluZ3MiIHJvbGU9ImJ1dHRvbiIgYXJpYS1sYWJl"
-    "bD0iU2V0dGluZ3MiIGFyaWEtZXhwYW5kZWQ9ImZhbHNlIj4KICAgIDxzdmcgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25l"
-    "IiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5l"
-    "am9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjEyIiBjeT0iMTIiIHI9IjMiPjwvY2lyY2xlPjxwYXRoIGQ9Ik0xOS40IDE1YTEuNjUg"
-    "MS42NSAwIDAgMCAuMzMgMS44MmwuMDYuMDZhMiAyIDAgMCAxIDAgMi44MyAyIDIgMCAwIDEtMi44MyAwbC0uMDYtLjA2YTEuNjUg"
-    "MS42NSAwIDAgMC0xLjgyLS4zMyAxLjY1IDEuNjUgMCAwIDAtMSAxLjUxVjIxYTIgMiAwIDAgMS0yIDIgMiAyIDAgMCAxLTItMnYt"
-    "LjA5QTEuNjUgMS42NSAwIDAgMCA5IDE5LjRhMS42NSAxLjY1IDAgMCAwLTEuODIuMzNsLS4wNi4wNmEyIDIgMCAwIDEtMi44MyAw"
-    "IDIgMiAwIDAgMSAwLTIuODNsLjA2LS4wNmExLjY1IDEuNjUgMCAwIDAgLjMzLTEuODIgMS42NSAxLjY1IDAgMCAwLTEuNTEtMUgz"
-    "YTIgMiAwIDAgMS0yLTIgMiAyIDAgMCAxIDItMmguMDlBMS42NSAxLjY1IDAgMCAwIDQuNiA5YTEuNjUgMS42NSAwIDAgMC0uMzMt"
-    "MS44MmwtLjA2LS4wNmEyIDIgMCAwIDEgMC0yLjgzIDIgMiAwIDAgMSAyLjgzIDBsLjA2LjA2YTEuNjUgMS42NSAwIDAgMCAxLjgy"
-    "LjMzSDlhMS42NSAxLjY1IDAgMCAwIDEtMS41MVYzYTIgMiAwIDAgMSAyLTIgMiAyIDAgMCAxIDIgMnYuMDlhMS42NSAxLjY1IDAg"
-    "MCAwIDEgMS41MSAxLjY1IDEuNjUgMCAwIDAgMS44Mi0uMzNsLjA2LS4wNmEyIDIgMCAwIDEgMi44MyAwIDIgMiAwIDAgMSAwIDIu"
-    "ODNsLS4wNi4wNmExLjY1IDEuNjUgMCAwIDAtLjMzIDEuODJWOWExLjY1IDEuNjUgMCAwIDAgMS41MSAxSDIxYTIgMiAwIDAgMSAy"
-    "IDIgMiAyIDAgMCAxLTIgMmgtLjA5YTEuNjUgMS42NSAwIDAgMC0xLjUxIDF6Ij48L3BhdGg+PC9zdmc+CiAgPC9kaXY+CjwvZGl2"
-    "PgoKPGRpdiBjbGFzcz0iYm94Ij4KCiAgPGRpdiBjbGFzcz0iZ2xhc3MtcGFuZWwgZ2xhc3MiPgogICAgPGRpdiBjbGFzcz0ic2V0"
-    "dGluZ3MtcGFuZWwiIGlkPSJzZXR0aW5nc1BhbmVsIj4KICAgICAgPGRpdiBjbGFzcz0ic2V0dGluZ3MtcGFuZWwtaGVhZCI+CiAg"
-    "ICAgICAgPHNwYW4+QVBJICZhbXA7IFNlYXJjaCBTZXR0aW5nczwvc3Bhbj4KICAgICAgICA8c3BhbiBvbmNsaWNrPSJzYXZlU2V0"
-    "dGluZ3MoKSI+U2F2ZSBTZXR0aW5nczwvc3Bhbj4KICAgICAgPC9kaXY+CgogICAgICA8ZGl2IGNsYXNzPSJjb29raWUtZ3JvdXAi"
-    "PgogICAgICAgIDxsYWJlbD5Zb3VUdWJlIEFQSSB2MyBLZXk8L2xhYmVsPgogICAgICAgIDx0ZXh0YXJlYSBpZD0ieXRBcGlLZXki"
-    "IHBsYWNlaG9sZGVyPSJBSXphU3kuLi4iPjwvdGV4dGFyZWE+CiAgICAgIDwvZGl2PgoKICAgICAgPGRpdiBjbGFzcz0iY29va2ll"
-    "LWdyb3VwIj4KICAgICAgICA8bGFiZWw+VGltZSBQZXJpb2Q8L2xhYmVsPgogICAgICAgIDxzZWxlY3QgaWQ9InBlcmlvZFNlbGVj"
-    "dCI+CiAgICAgICAgICA8b3B0aW9uIHZhbHVlPSIxIj5MYXN0IDI0IEhvdXJzPC9vcHRpb24+CiAgICAgICAgICA8b3B0aW9uIHZh"
-    "bHVlPSI3IiBzZWxlY3RlZD5MYXN0IDcgRGF5czwvb3B0aW9uPgogICAgICAgICAgPG9wdGlvbiB2YWx1ZT0iMzAiPkxhc3QgMzAg"
-    "RGF5czwvb3B0aW9uPgogICAgICAgIDwvc2VsZWN0PgogICAgICA8L2Rpdj4KCiAgICAgIDxkaXYgY2xhc3M9ImNvb2tpZS1ncm91"
-    "cCI+CiAgICAgICAgPGxhYmVsPk51bWJlciBvZiBSZXN1bHRzPC9sYWJlbD4KICAgICAgICA8c2VsZWN0IGlkPSJtYXhSZXN1bHRz"
-    "U2VsZWN0Ij4KICAgICAgICAgIDxvcHRpb24gdmFsdWU9IjEwIj4xMDwvb3B0aW9uPgogICAgICAgICAgPG9wdGlvbiB2YWx1ZT0i"
-    "MjAiIHNlbGVjdGVkPjIwPC9vcHRpb24+CiAgICAgICAgICA8b3B0aW9uIHZhbHVlPSIzMCI+MzA8L29wdGlvbj4KICAgICAgICAg"
-    "IDxvcHRpb24gdmFsdWU9IjQwIj40MDwvb3B0aW9uPgogICAgICAgICAgPG9wdGlvbiB2YWx1ZT0iNTAiPjUwPC9vcHRpb24+CiAg"
-    "ICAgICAgPC9zZWxlY3Q+CiAgICAgIDwvZGl2PgogICAgPC9kaXY+CgogICAgPGlucHV0IHR5cGU9InRleHQiIGlkPSJrZXl3b3Jk"
-    "SW5wdXQiIGNsYXNzPSJtYWluLWlucHV0IiBwbGFjZWhvbGRlcj0iZS5nLiBtaW5lY3JhZnQgc3BlZWRydW4sIHRydWUgY3JpbWUs"
-    "IGJ1ZGdldCB0cmF2ZWwiPgoKICAgIDxidXR0b24gY2xhc3M9InNvbGlkIiBpZD0iYWN0aW9uQnRuIiBvbmNsaWNrPSJydW5TZWFy"
-    "Y2goKSI+UmVmcmVzaCBUcmVuZGluZzwvYnV0dG9uPgoKICAgIDxkaXYgY2xhc3M9InN0YXR1cyIgaWQ9Im1haW5TdGF0dXMiPlJl"
-    "YWR5IHRvIHNlYXJjaC48L2Rpdj4KCiAgICA8ZGl2IGNsYXNzPSJsaXN0LWhlYWRlciIgaWQ9Imxpc3RIZWFkZXIiPgogICAgICA8"
-    "c3BhbiBpZD0ibGlzdENvdW50Ij4wIFZpZGVvcyBGb3VuZDwvc3Bhbj4KICAgIDwvZGl2PgogICAgPGRpdiBjbGFzcz0idXNlci1s"
-    "aXN0IiBpZD0icmVzdWx0c0xpc3QiPjwvZGl2PgogIDwvZGl2Pgo8L2Rpdj4KCjxzY3JpcHQ+CiAgY29uc3QgQVBJX0JBU0UgPSAn"
-    "aHR0cHM6Ly93d3cuZ29vZ2xlYXBpcy5jb20veW91dHViZS92Myc7CiAgbGV0IG1vZGUgPSAndHJlbmRpbmcnOyAvLyAndHJlbmRp"
-    "bmcnIHwgJ2tleXdvcmQnCgogIGRvY3VtZW50LmFkZEV2ZW50TGlzdGVuZXIoIkRPTUNvbnRlbnRMb2FkZWQiLCAoKSA9PiB7CiAg"
-    "ICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgieXRBcGlLZXkiKS52YWx1ZSA9IGxvY2FsU3RvcmFnZS5nZXRJdGVtKCJ5dF9hcGlf"
-    "a2V5IikgfHwgIiI7CiAgICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgicGVyaW9kU2VsZWN0IikudmFsdWUgPSBsb2NhbFN0b3Jh"
-    "Z2UuZ2V0SXRlbSgieXRfcGVyaW9kIikgfHwgIjciOwogICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1heFJlc3VsdHNTZWxl"
-    "Y3QiKS52YWx1ZSA9IGxvY2FsU3RvcmFnZS5nZXRJdGVtKCJ5dF9tYXhfcmVzdWx0cyIpIHx8ICIyMCI7CiAgICB1cGRhdGVNb2Rl"
-    "VUkoKTsKICB9KTsKCiAgZnVuY3Rpb24gdG9nZ2xlU2V0dGluZ3MoKSB7CiAgICBjb25zdCBwYW5lbCA9IGRvY3VtZW50LmdldEVs"
-    "ZW1lbnRCeUlkKCJzZXR0aW5nc1BhbmVsIik7CiAgICBjb25zdCBidG4gPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgic2V0dGlu"
-    "Z3NCdG4iKTsKICAgIGNvbnN0IGlzT3BlbiA9IHBhbmVsLnN0eWxlLmRpc3BsYXkgPT09ICJibG9jayI7CiAgICBwYW5lbC5zdHls"
-    "ZS5kaXNwbGF5ID0gaXNPcGVuID8gIm5vbmUiIDogImJsb2NrIjsKICAgIGJ0bi5jbGFzc0xpc3QudG9nZ2xlKCJpcy1vcGVuIiwg"
-    "IWlzT3Blbik7CiAgICBidG4uc2V0QXR0cmlidXRlKCJhcmlhLWV4cGFuZGVkIiwgU3RyaW5nKCFpc09wZW4pKTsKICB9CgogIGZ1"
-    "bmN0aW9uIHNhdmVTZXR0aW5ncygpIHsKICAgIGxvY2FsU3RvcmFnZS5zZXRJdGVtKCJ5dF9hcGlfa2V5IiwgZG9jdW1lbnQuZ2V0"
-    "RWxlbWVudEJ5SWQoInl0QXBpS2V5IikudmFsdWUudHJpbSgpKTsKICAgIGxvY2FsU3RvcmFnZS5zZXRJdGVtKCJ5dF9wZXJpb2Qi"
-    "LCBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgicGVyaW9kU2VsZWN0IikudmFsdWUpOwogICAgbG9jYWxTdG9yYWdlLnNldEl0ZW0o"
-    "Inl0X21heF9yZXN1bHRzIiwgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1heFJlc3VsdHNTZWxlY3QiKS52YWx1ZSk7CiAgICBz"
-    "ZXRTdGF0dXMoIlNldHRpbmdzIHNhdmVkLiIsICJzdWNjZXNzIik7CiAgICB0b2dnbGVTZXR0aW5ncygpOwogIH0KCiAgZnVuY3Rp"
-    "b24gZ2V0QXBpS2V5KCkgewogICAgcmV0dXJuIGxvY2FsU3RvcmFnZS5nZXRJdGVtKCJ5dF9hcGlfa2V5IikgfHwgZG9jdW1lbnQu"
-    "Z2V0RWxlbWVudEJ5SWQoInl0QXBpS2V5IikudmFsdWUudHJpbSgpOwogIH0KCiAgZnVuY3Rpb24gc2V0TW9kZShuZXdNb2RlKSB7"
-    "CiAgICBtb2RlID0gbmV3TW9kZTsKICAgIHVwZGF0ZU1vZGVVSSgpOwogIH0KCiAgZnVuY3Rpb24gdXBkYXRlTW9kZVVJKCkgewog"
-    "ICAgZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1vZGVUcmVuZGluZ0J0biIpLmNsYXNzTGlzdC50b2dnbGUoIm1vZGUtYWN0aXZl"
-    "IiwgbW9kZSA
+# --- APPLE MINIMAL / GLASSMORPHIC CSS ---
+st.markdown("""
+<style>
+    /* Base Theme & Background */
+    [data-testid="stAppViewContainer"] {
+        background-color: #030304;
+        color: #f5f5f7;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* Ambient Glow Background (Like BulkDrop) */
+    [data-testid="stAppViewContainer"]::before, [data-testid="stAppViewContainer"]::after {
+        content: ''; position: fixed; border-radius: 50%; filter: blur(130px); z-index: -1; opacity: 0.35;
+    }
+    [data-testid="stAppViewContainer"]::before { top: -10%; left: -10%; width: 40vw; height: 40vw; background: #5e5ce6; }
+    [data-testid="stAppViewContainer"]::after { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: #bf5af2; }
+
+    /* Typography Overrides */
+    h1, h2, h3, h4, h5, h6, p, span, label { color: #f5f5f7 !important; }
+    
+    /* Sidebar Styling (Glassmorphic) */
+    [data-testid="stSidebar"] {
+        background: rgba(30, 30, 35, 0.4) !important;
+        backdrop-filter: blur(28px) saturate(160%);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Inputs, Sliders & Selectboxes */
+    .stTextInput>div>div>input, .stSelectbox>div>div>div, .stNumberInput>div>div>input {
+        background-color: rgba(255, 255, 255, 0.07) !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        color: white !important;
+        border-radius: 12px !important;
+    }
+    .stTextInput>div>div>input:focus, .stSelectbox>div>div>div:focus {
+        border-color: #0a84ff !important;
+        box-shadow: 0 0 0 1px #0a84ff !important;
+    }
+    
+    /* Buttons */
+    .stButton>button {
+        background: #fff !important;
+        color: #000 !important;
+        border-radius: 16px !important;
+        border: none !important;
+        font-weight: 600 !important;
+        padding: 8px 24px !important;
+        transition: all 0.2s ease !important;
+        width: 100%;
+    }
+    .stButton>button:hover {
+        transform: scale(0.98);
+        opacity: 0.9;
+    }
+
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        padding: 4px;
+        gap: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 12px;
+        padding: 8px 16px;
+        color: rgba(255, 255, 255, 0.6);
+        border: none !important;
+        background: transparent !important;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        color: #fff !important;
+    }
+
+    /* DataFrame / Table Styling */
+    [data-testid="stDataFrame"] {
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 8px;
+    }
+    [data-testid="stDataFrame"] div { color: #f5f5f7 !important; }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🔥 YouTube Explosion & Velocity Finder")
+
+# --- SIDEBAR: API KEY ---
+st.sidebar.header("Configuration")
+api_key_input = st.sidebar.text_input("Enter YouTube API v3 Key", type="password")
+
+# --- SESSION STATE ---
+if 'youtube' not in st.session_state:
+    st.session_state.youtube = None
+
+# --- HELPER FUNCTIONS ---
+def connect_to_youtube(key):
+    if "streamlit" in key.lower() or len(key) < 10:
+        st.error("⚠️ Please paste a valid API Key (starts with 'AIza'), not a command.")
+        return None
+    try:
+        service = build('youtube', 'v3', developerKey=key)
+        # Test call
+        service.videoCategories().list(part='snippet', regionCode='US').execute()
+        return service
+    except Exception as e:
+        st.error(f"❌ API Error: {e}")
+        return None
+
+def get_channel_info(yt_client, channel_ids):
+    if not channel_ids: return {}
+    res = yt_client.channels().list(part="snippet,statistics", id=",".join(channel_ids)).execute()
+    return {item['id']: item for item in res.get('items', [])}
+
+def process_results(yt_client, video_items):
+    channel_ids = [item['snippet']['channelId'] for item in video_items]
+    channels = get_channel_info(yt_client, channel_ids)
+    
+    data = []
+    for item in video_items:
+        c_id = item['snippet']['channelId']
+        c_info = channels.get(c_id, {})
+        
+        pub_date = parser.isoparse(c_info['snippet']['publishedAt']) if c_info else datetime.now(timezone.utc)
+        age_days = (datetime.now(timezone.utc) - pub_date).days
+        
+        data.append({
+            "Title": item['snippet']['title'],
+            "Channel": item['snippet']['channelTitle'],
+            "Views": int(item['statistics'].get('viewCount', 0)) if 'statistics' in item else 0,
+            "Subs": int(c_info['statistics'].get('subscriberCount', 0)) if c_info else 0,
+            "Videos": int(c_info['statistics'].get('videoCount', 0)) if c_info else 0,
+            "Ch Age (Days)": age_days,
+            # These are the links we will make responsive
+            "Video Link": f"https://www.youtube.com/watch?v={item['id'] if isinstance(item['id'], str) else item['id'].get('videoId')}",
+            "Channel Link": f"https://www.youtube.com/channel/{c_id}"
+        })
+    return pd.DataFrame(data)
+
+# --- TABLE RENDERER (The Responsive Part) ---
+def display_responsive_table(df):
+    """Renders the dataframe with clickable, responsive links."""
+    st.dataframe(
+        df,
+        column_config={
+            "Video Link": st.column_config.LinkColumn(
+                "Watch Video", 
+                help="Click to watch on YouTube",
+                validate=r"^https://www.youtube.com/watch\?v=.*",
+                display_text="▶️ Watch"
+            ),
+            "Channel Link": st.column_config.LinkColumn(
+                "Visit Channel",
+                help="Open Channel Page",
+                display_text="👤 Open Channel"
+            ),
+            "Views": st.column_config.NumberColumn(format="%d 👁️"),
+            "Subs": st.column_config.NumberColumn(format="%d 👥"),
+            "Ch Age (Days)": st.column_config.ProgressColumn(
+                "Channel Age",
+                help="Days since channel creation",
+                format="%d days",
+                min_value=0,
+                max_value=365*2 # Progress bar fills up if channel is 2 years old
+            )
+        },
+        hide_index=True,
+        use_container_width=True
+    )
+
+# --- APP LOGIC ---
+if api_key_input:
+    if st.session_state.youtube is None:
+        st.session_state.youtube = connect_to_youtube(api_key_input)
+else:
+    st.info("👋 Please enter your API Key in the sidebar to begin.")
+    st.stop()
+
+if st.session_state.youtube:
+    tab1, tab2 = st.tabs(["⚡ Trending Now", "🔍 Keyword Explosion"])
+
+    with tab1:
+        st.subheader("Global Trending Videos")
+        if st.button("Refresh Trending"):
+            with st.spinner("Fetching..."):
+                res = st.session_state.youtube.videos().list(
+                    part="snippet,statistics", chart="mostPopular", maxResults=25
+                ).execute()
+                df_trend = process_results(st.session_state.youtube, res.get('items', []))
+                display_responsive_table(df_trend)
+
+    with tab2:
+        st.subheader("Find Exploding Videos by Topic")
+        col1, col2, col3 = st.columns([2,1,1])
+        with col1:
+            search_query = st.text_input("Enter Niche Keyword", "AI Tools")
+        with col2:
+            period = st.selectbox("Time Period", ["Last 24 Hours", "Last 7 Days", "Last 30 Days"])
+        with col3:
+            max_vids = st.slider("Results", 10, 50, 20)
+
+        if st.button("Find Exploding Content"):
+            with st.spinner("Searching..."):
+                days_map = {"Last 24 Hours": 1, "Last 7 Days": 7, "Last 30 Days": 30}
+                after_date = (datetime.now(timezone.utc) - timedelta(days=days_map[period])).isoformat()
+                
+                search_res = st.session_state.youtube.search().list(
+                    q=search_query, part="snippet", type="video", order="viewCount", 
+                    publishedAfter=after_date, maxResults=max_vids
+                ).execute()
+                
+                v_ids = [item['id']['videoId'] for item in search_res.get('items', [])]
+                if v_ids:
+                    video_stats_res = st.session_state.youtube.videos().list(
+                        part="snippet,statistics", id=",".join(v_ids)
+                    ).execute()
+                    df_search = process_results(st.session_state.youtube, video_stats_res.get('items', []))
+                    display_responsive_table(df_search)
