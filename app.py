@@ -2,7 +2,6 @@ from flask import Flask
 
 app = Flask(__name__)
 
-# This contains your exact BulkDrop UI, but with the Results section rebuilt as a Glassmorphic Data Table (like Streamlit's st.dataframe)
 HTML_UI = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -57,7 +56,7 @@ HTML_UI = """<!DOCTYPE html>
   .brand-mark { display: block; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
   .brand-sub { display: block; margin-top: 5px; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
 
-  .box { width: 100%; max-width: 900px; /* Widened to fit the table */ }
+  .box { width: 100%; max-width: 900px; }
 
   .glass {
     position: relative;
@@ -66,6 +65,18 @@ HTML_UI = """<!DOCTYPE html>
     backdrop-filter: blur(28px) saturate(160%);
     border: 1px solid var(--glass-border);
     box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 50px rgba(0,0,0,0.45);
+  }
+  .glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.35), rgba(255,255,255,0) 40%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
   }
 
   .glass-panel { border-radius: var(--radius-lg); padding: 24px; margin-top: 16px; }
@@ -172,7 +183,6 @@ HTML_UI = """<!DOCTYPE html>
     margin-top: 32px; margin-bottom: 12px; display: none; justify-content: space-between;
   }
 
-  /* --- STREAMLIT-STYLE DATA TABLE (GLASSMORPHIC) --- */
   .table-container {
     width: 100%;
     overflow-x: auto;
@@ -200,6 +210,11 @@ HTML_UI = """<!DOCTYPE html>
     border-bottom: 1px solid rgba(255,255,255,0.1);
     z-index: 2;
   }
+  
+  /* --- SORTING STYLES --- */
+  .sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
+  .sortable:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  
   .glass-table td {
     padding: 12px 16px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
@@ -209,10 +224,8 @@ HTML_UI = """<!DOCTYPE html>
     background: rgba(255,255,255,0.05);
   }
   
-  /* Text Truncation for Title/Channel */
   .trunc { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 
-  /* Streamlit-style Progress Bar for Channel Age */
   .progress-bar-bg {
     width: 60px; height: 6px; background: rgba(255,255,255,0.15); 
     border-radius: 4px; display: inline-block; vertical-align: middle; margin-right: 8px; overflow: hidden;
@@ -222,7 +235,6 @@ HTML_UI = """<!DOCTYPE html>
   }
   .progress-val { font-size: 11px; color: var(--ink-dim); }
 
-  /* Action Buttons in Table */
   .table-btn {
     font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px;
     background: rgba(255,255,255,0.1); color: #fff; text-decoration: none; transition: background 0.2s;
@@ -253,12 +265,11 @@ HTML_UI = """<!DOCTYPE html>
   <div class="pill-glass glass" id="modeTrendingBtn" onclick="setMode('trending')">⚡ Trending Now</div>
   
   <div class="icon-glass glass" id="settingsBtn" onclick="toggleSettings()" title="Settings" role="button" aria-label="Settings" aria-expanded="false">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
   </div>
 </div>
 
 <div class="box">
-
   <div class="glass-panel glass">
     <div class="settings-panel" id="settingsPanel">
       <div class="settings-panel-head">
@@ -292,7 +303,6 @@ HTML_UI = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Empty default value as requested -->
     <input type="text" id="keywordInput" class="main-input" placeholder="e.g. minecraft speedrun, true crime, budget travel">
 
     <button class="solid" id="actionBtn" onclick="runSearch()">Find Exploding Content</button>
@@ -303,7 +313,6 @@ HTML_UI = """<!DOCTYPE html>
       <span id="listCount">0 Videos Found</span>
     </div>
     
-    <!-- Container where the table will be injected -->
     <div id="resultsTableContainer"></div>
   </div>
 </div>
@@ -311,6 +320,10 @@ HTML_UI = """<!DOCTYPE html>
 <script>
   const API_BASE = 'https://www.googleapis.com/youtube/v3';
   let mode = 'keyword'; 
+  
+  // --- GLOBALS FOR SORTING ---
+  window.lastFetchedResults = [];
+  window.sortState = { col: null, dir: 0 }; // 0: default, 1: desc (high-to-low), 2: asc (low-to-high)
 
   document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
@@ -398,32 +411,27 @@ HTML_UI = """<!DOCTYPE html>
 
   async function fetchTrending(apiKey) {
     setStatus("Fetching trending videos...", "active");
-
     const url = `${API_BASE}/videos?part=snippet,statistics&chart=mostPopular&maxResults=25&key=${apiKey}`;
     const res = await fetch(url);
     const data = await res.json();
-
     if (data.error) throw new Error(data.error.message);
-
     await renderResults(apiKey, data.items || []);
   }
 
   async function fetchKeywordSearch(apiKey, keyword) {
     setStatus("Searching for exploding content...", "active");
-
     const days = parseInt(localStorage.getItem("yt_period") || "7", 10);
     const maxResults = parseInt(localStorage.getItem("yt_max_results") || "20", 10);
     const afterDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-
     const searchUrl = `${API_BASE}/search?part=snippet&q=${encodeURIComponent(keyword)}&type=video&order=viewCount&publishedAfter=${afterDate}&maxResults=${maxResults}&key=${apiKey}`;
     const searchRes = await fetch(searchUrl);
     const searchData = await searchRes.json();
-
     if (searchData.error) throw new Error(searchData.error.message);
 
     const videoIds = (searchData.items || []).map(item => item.id.videoId).filter(Boolean);
     if (videoIds.length === 0) {
       setStatus("No results for that keyword/time period. Try widening the time period.", "error");
+      window.lastFetchedResults = [];
       renderTable([]);
       return;
     }
@@ -431,15 +439,14 @@ HTML_UI = """<!DOCTYPE html>
     const videosUrl = `${API_BASE}/videos?part=snippet,statistics&id=${videoIds.join(',')}&key=${apiKey}`;
     const videosRes = await fetch(videosUrl);
     const videosData = await videosRes.json();
-
     if (videosData.error) throw new Error(videosData.error.message);
-
     await renderResults(apiKey, videosData.items || []);
   }
 
   async function renderResults(apiKey, videoItems) {
     if (videoItems.length === 0) {
       setStatus("No results found.", "error");
+      window.lastFetchedResults = [];
       renderTable([]);
       return;
     }
@@ -470,6 +477,9 @@ HTML_UI = """<!DOCTYPE html>
       };
     });
 
+    // Reset sort state and save original data fetch
+    window.lastFetchedResults = results;
+    window.sortState = { col: null, dir: 0 };
     renderTable(results);
     setStatus(`${results.length} videos found.`, "success");
   }
@@ -486,7 +496,37 @@ HTML_UI = """<!DOCTYPE html>
     return div.innerHTML;
   }
 
-  // --- REBUILT AS A DATAFRAME-STYLE TABLE ---
+  // --- SORTING LOGIC ---
+  function handleSort(col) {
+    if (window.sortState.col === col) {
+      window.sortState.dir = (window.sortState.dir + 1) % 3;
+    } else {
+      window.sortState.col = col;
+      window.sortState.dir = 1; // 1 = high to low first
+    }
+
+    let toRender = [...window.lastFetchedResults];
+
+    if (window.sortState.dir !== 0) {
+      toRender.sort((a, b) => {
+        let valA = a[col];
+        let valB = b[col];
+        if (window.sortState.dir === 1) return valB - valA; // High to Low
+        return valA - valB; // Low to High
+      });
+    }
+    
+    renderTable(toRender);
+  }
+
+  function getSortIndicator(col) {
+    if (window.sortState && window.sortState.col === col) {
+      if (window.sortState.dir === 1) return ' ↓';
+      if (window.sortState.dir === 2) return ' ↑';
+    }
+    return '';
+  }
+
   function renderTable(results) {
     const container = document.getElementById('resultsTableContainer');
     const header = document.getElementById('listHeader');
@@ -501,7 +541,6 @@ HTML_UI = """<!DOCTYPE html>
     header.style.display = 'flex';
     count.textContent = `${results.length} Videos Found`;
 
-    // Start building the table HTML
     let html = `
       <div class="table-container">
         <table class="glass-table">
@@ -509,10 +548,10 @@ HTML_UI = """<!DOCTYPE html>
             <tr>
               <th>Title</th>
               <th>Channel</th>
-              <th>Views</th>
-              <th>Subs</th>
-              <th>Videos</th>
-              <th>Channel Age</th>
+              <th class="sortable" onclick="handleSort('views')" title="Sort by Views">Views${getSortIndicator('views')}</th>
+              <th class="sortable" onclick="handleSort('subs')" title="Sort by Subscribers">Subs${getSortIndicator('subs')}</th>
+              <th class="sortable" onclick="handleSort('videos')" title="Sort by Videos">Videos${getSortIndicator('videos')}</th>
+              <th class="sortable" onclick="handleSort('ageDays')" title="Sort by Age">Channel Age${getSortIndicator('ageDays')}</th>
               <th>Video Link</th>
               <th>Channel Link</th>
             </tr>
@@ -521,7 +560,6 @@ HTML_UI = """<!DOCTYPE html>
     `;
 
     results.forEach(r => {
-      // Calculate progress bar percentage (assuming max 2 years / 730 days like Streamlit)
       let agePercent = Math.min((r.ageDays / 730) * 100, 100);
       
       html += `
