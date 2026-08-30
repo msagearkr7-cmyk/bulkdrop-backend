@@ -34,14 +34,25 @@ def download():
         with open(cookie_filename, 'w', encoding='utf-8') as f:
             f.write(cookies_text)
 
+    is_tiktok = 'tiktok.com' in url.lower()
+
     ydl_opts = {
         'format': 'best',
         'quiet': True,
         'no_warnings': True,
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'referer': 'https://www.google.com/',
+        'referer': 'https://www.tiktok.com/' if is_tiktok else 'https://www.google.com/',
         'geo_bypass': True,
-        'geo_bypass_country': 'US'
+        'geo_bypass_country': 'US',
+        'extractor_args': {
+            'tiktok': {
+                'webpage_download': True
+            }
+        },
+        'http_headers': {
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Referer': 'https://www.tiktok.com/' if is_tiktok else 'https://www.google.com/'
+        }
     }
     
     if os.path.exists(cookie_filename):
