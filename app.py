@@ -1,7 +1,7 @@
 from flask import Flask, request, Response, jsonify
 from googleapiclient.discovery import build
 from dateutil import parser
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import re
 import os
@@ -74,25 +74,33 @@ HTML_UI = """<!DOCTYPE html>
     border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.45);
   }
 
-  .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .header-row h3 { font-size: 16px; font-weight: 600; }
-  .btn-icon { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 8px 16px; border-radius: 99px; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
+  .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .profile-group { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 12px; border: 1px solid var(--glass-border-soft); }
+  .profile-group select { background: transparent; border: none; color: #fff; font-size: 14px; font-weight: 600; outline: none; cursor: pointer; padding: 4px; }
+  .profile-group select option { background: #1a1a1a; color: #fff; }
+  .btn-icon { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 6px 12px; border-radius: 99px; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
   .btn-icon:hover { background: rgba(255,255,255,0.2); }
+  .btn-del-profile { color: #ff453a; margin-left: 4px; }
 
-  /* Tag Inputs */
+  /* Tag Inputs & Form Controls */
   .tag-container {
     background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border-soft); border-radius: var(--radius-md);
-    padding: 10px 14px; min-height: 56px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
+    padding: 10px 14px; min-height: 52px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
   }
-  .tag-container input {
-    background: transparent; border: none; color: var(--ink); font-size: 14px; outline: none; flex: 1; min-width: 150px;
+  .tag-container input, .tag-container select {
+    background: transparent; border: none; color: var(--ink); font-size: 14px; outline: none; flex: 1; min-width: 100px;
   }
+  .tag-container select option { background: #1a1a1a; color: #fff; }
   .tag {
     background: rgba(255,255,255,0.15); color: #fff; font-size: 12px; font-weight: 600; padding: 6px 12px;
     border-radius: 8px; display: flex; align-items: center; gap: 6px;
   }
   .tag span { cursor: pointer; color: rgba(255,255,255,0.5); }
   .tag span:hover { color: #ff453a; }
+
+  .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .filter-col { display: flex; flex-direction: column; gap: 6px; }
+  .filter-col label { font-size: 11px; color: var(--ink-dim); font-weight: 600; text-transform: uppercase; }
 
   /* Split Buttons */
   .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
@@ -155,19 +163,25 @@ HTML_UI = """<!DOCTYPE html>
 <div class="box">
   <div class="glass-panel">
     
+    <!-- Profile & Header Row -->
     <div class="header-row">
-      <h3>Pipeline Configuration</h3>
-      <button class="btn-icon" onclick="toggleSettings()">⚙️ Base Manager & API</button>
+      <div class="profile-group">
+        <span style="font-size:11px; color:var(--ink-dim); text-transform:uppercase; font-weight:700;">Workspace:</span>
+        <select id="profileSelect" onchange="switchProfile()"></select>
+        <button class="btn-icon" onclick="createProfile()">+ New</button>
+        <button class="btn-icon btn-del-profile" onclick="deleteProfile()" title="Delete Profile">🗑️</button>
+      </div>
+      <button class="btn-icon" onclick="toggleSettings()" style="padding: 10px 16px; background: rgba(10, 132, 255, 0.2); color: #64d2ff;">⚙️ API & Base Manager</button>
     </div>
 
     <!-- Settings & Base Manager Panel -->
     <div class="settings-panel" id="settingsPanel">
       <div style="margin-bottom:16px;">
-        <label style="font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:600;">YouTube API Key</label>
-        <input type="text" id="ytApiKey" class="tag-container" style="width:100%; margin-top:6px;" placeholder="AIzaSy..." onchange="saveConfig()">
+        <label style="font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:600;">Global YouTube API Key</label>
+        <input type="text" id="ytApiKey" class="tag-container" style="width:100%; margin-top:6px; min-height:40px;" placeholder="AIzaSy..." onchange="saveGlobalApiKey()">
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <label style="font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:600;">Verified Base Channels</label>
+        <label style="font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:600;">Verified Base Channels (Current Profile)</label>
         <span style="font-size:12px; color:var(--accent);" id="baseCount">0 Saved</span>
       </div>
       <div class="channel-grid" id="channelGrid">
@@ -175,19 +189,49 @@ HTML_UI = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Tag Inputs -->
-    <div style="font-size:11px; margin-bottom:6px; color:var(--ink-dim); font-weight:600;">1. DISCOVERY SEEDS (Type & Press Enter)</div>
-    <div class="tag-container" id="seedContainer">
-      <input type="text" id="seedInput" placeholder="e.g. street food, funny animals...">
+    <!-- Configuration Tags & Inputs -->
+    <div class="filter-col">
+      <label>1. Discovery Seeds (Type & Press Enter)</label>
+      <div class="tag-container" id="seedContainer">
+        <input type="text" id="seedInput" placeholder="e.g. street food, funny animals...">
+      </div>
     </div>
 
-    <div style="font-size:11px; margin-bottom:6px; color:var(--ink-dim); font-weight:600;">2. NICHE VERIFICATION KEYWORDS (Type & Press Enter)</div>
-    <div class="tag-container" id="nicheContainer">
-      <input type="text" id="nicheInput" placeholder="e.g. spicy, vendor, burger...">
+    <div class="filter-col">
+      <label>2. Niche Qualification Keywords (Type & Press Enter)</label>
+      <div class="tag-container" id="nicheContainer">
+        <input type="text" id="nicheInput" placeholder="e.g. spicy, vendor, burger...">
+      </div>
     </div>
 
-    <div style="font-size:11px; margin-bottom:6px; color:var(--ink-dim); font-weight:600;">3. QUALIFICATION THRESHOLD</div>
-    <input type="number" id="thresholdInput" class="tag-container" style="width:100%; color:#fff; font-size:14px;" value="5" onchange="saveConfig()">
+    <!-- Advanced Filters -->
+    <div class="filter-grid">
+      <div class="filter-col">
+        <label>Upload Date (Discovery)</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="dateFilter" onchange="saveProfile()">
+          <option value="1">Today</option>
+          <option value="7" selected>This Week</option>
+          <option value="30">This Month</option>
+          <option value="365">This Year</option>
+        </select></div>
+      </div>
+      <div class="filter-col">
+        <label>Video Type (Discovery)</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
+          <option value="any">All Videos</option>
+          <option value="short">Shorts Only (<= 4 min)</option>
+          <option value="long">Long Form (>= 20 min)</option>
+        </select></div>
+      </div>
+      <div class="filter-col">
+        <label>Max Results (Per Seed)</label>
+        <div class="tag-container" style="min-height: 44px;"><input type="number" id="maxResults" value="15" onchange="saveProfile()"></div>
+      </div>
+      <div class="filter-col">
+        <label>Qual. Threshold (Matches)</label>
+        <div class="tag-container" style="min-height: 44px;"><input type="number" id="thresholdInput" value="5" onchange="saveProfile()"></div>
+      </div>
+    </div>
 
     <!-- Action Buttons -->
     <div class="action-grid">
@@ -212,8 +256,17 @@ HTML_UI = """<!DOCTYPE html>
 </div>
 
 <script>
-  let config = { seeds: [], niches: [], threshold: 5, apiKey: '' };
-  let baseChannels = {}; // Master permanent storage
+  let masterData = {
+    apiKey: '',
+    activeProfile: 'Default',
+    profiles: {
+      'Default': { 
+        seeds: [], niches: [], threshold: 5, 
+        dateFilter: '7', typeFilter: 'any', maxResults: 15,
+        channels: {} 
+      }
+    }
+  };
 
   // --- 1. LOGIN SYSTEM ---
   window.onload = () => {
@@ -229,7 +282,6 @@ HTML_UI = """<!DOCTYPE html>
     const savedPin = localStorage.getItem('profile_pin');
     
     if (!input) return;
-
     if (!savedPin) {
       localStorage.setItem('profile_pin', input);
       unlockSystem();
@@ -247,37 +299,97 @@ HTML_UI = """<!DOCTYPE html>
     setupTagListeners();
   }
 
-  // --- 2. PERMANENT DATA MANAGEMENT ---
+  // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function loadPermanentData() {
-    const savedConfig = localStorage.getItem('app_config');
-    if (savedConfig) {
-      config = JSON.parse(savedConfig);
-      document.getElementById('ytApiKey').value = config.apiKey || '';
-      document.getElementById('thresholdInput').value = config.threshold || 5;
-      renderTags('seedContainer', config.seeds);
-      renderTags('nicheContainer', config.niches);
-    }
-
-    const savedChannels = localStorage.getItem('base_channels');
-    if (savedChannels) {
-      baseChannels = JSON.parse(savedChannels);
-      syncBackend(); // Push local master list to backend memory instantly
-    }
-    renderChannelGrid();
+    const savedMaster = localStorage.getItem('app_master_v2');
+    if (savedMaster) {
+      masterData = JSON.parse(savedMaster);
+    } 
+    document.getElementById('ytApiKey').value = masterData.apiKey || '';
+    renderProfileDropdown();
+    loadActiveProfileUI();
   }
 
-  function saveConfig() {
-    config.apiKey = document.getElementById('ytApiKey').value.trim();
-    config.threshold = parseInt(document.getElementById('thresholdInput').value) || 5;
-    localStorage.setItem('app_config', JSON.stringify(config));
+  function saveGlobalApiKey() {
+    masterData.apiKey = document.getElementById('ytApiKey').value.trim();
+    saveMaster();
+  }
+
+  function saveMaster() {
+    localStorage.setItem('app_master_v2', JSON.stringify(masterData));
+  }
+
+  function renderProfileDropdown() {
+    const select = document.getElementById('profileSelect');
+    select.innerHTML = '';
+    Object.keys(masterData.profiles).forEach(pName => {
+      const opt = document.createElement('option');
+      opt.value = pName; opt.innerText = pName;
+      if (pName === masterData.activeProfile) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  function switchProfile() {
+    masterData.activeProfile = document.getElementById('profileSelect').value;
+    saveMaster();
+    loadActiveProfileUI();
+  }
+
+  function createProfile() {
+    const pName = prompt("Enter new Profile Name:");
+    if (pName && pName.trim() !== '') {
+      if (!masterData.profiles[pName]) {
+        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', typeFilter: 'any', maxResults: 15, channels: {} };
+        masterData.activeProfile = pName;
+        saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
+      } else { alert("Profile name already exists."); }
+    }
+  }
+
+  function deleteProfile() {
+    const active = masterData.activeProfile;
+    if (active === 'Default') return alert("Cannot delete the Default profile.");
+    if (confirm(`Are you sure you want to delete workspace "${active}"?`)) {
+      delete masterData.profiles[active];
+      masterData.activeProfile = 'Default';
+      saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
+    }
+  }
+
+  function loadActiveProfileUI() {
+    const pData = masterData.profiles[masterData.activeProfile];
+    
+    // Set form fields
+    document.getElementById('thresholdInput').value = pData.threshold || 5;
+    document.getElementById('dateFilter').value = pData.dateFilter || '7';
+    document.getElementById('typeFilter').value = pData.typeFilter || 'any';
+    document.getElementById('maxResults').value = pData.maxResults || 15;
+    
+    // Render Tags & Channels
+    renderTags('seedContainer', pData.seeds);
+    renderTags('nicheContainer', pData.niches);
+    renderChannelGrid();
+    
+    // Sync active channels to backend instantly
+    syncBackend();
+  }
+
+  function saveProfile() {
+    const active = masterData.activeProfile;
+    masterData.profiles[active].threshold = parseInt(document.getElementById('thresholdInput').value) || 5;
+    masterData.profiles[active].dateFilter = document.getElementById('dateFilter').value;
+    masterData.profiles[active].typeFilter = document.getElementById('typeFilter').value;
+    masterData.profiles[active].maxResults = parseInt(document.getElementById('maxResults').value) || 15;
+    saveMaster();
   }
 
   async function syncBackend() {
-    // Keeps backend JSON in sync with browser master list
+    const channels = masterData.profiles[masterData.activeProfile].channels;
     await fetch('/api/sync-channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(baseChannels)
+      body: JSON.stringify(channels)
     });
   }
 
@@ -286,10 +398,10 @@ HTML_UI = """<!DOCTYPE html>
     const handleEnter = (e, arrKey, containerId, inputId) => {
       if (e.key === 'Enter' && e.target.value.trim()) {
         const val = e.target.value.trim();
-        if (!config[arrKey].includes(val)) {
-          config[arrKey].push(val);
-          saveConfig();
-          renderTags(containerId, config[arrKey]);
+        const active = masterData.activeProfile;
+        if (!masterData.profiles[active][arrKey].includes(val)) {
+          masterData.profiles[active][arrKey].push(val);
+          saveMaster(); renderTags(containerId, masterData.profiles[active][arrKey]);
         }
         e.target.value = '';
       }
@@ -304,8 +416,7 @@ HTML_UI = """<!DOCTYPE html>
     container.innerHTML = '';
     
     arr.forEach((tag, idx) => {
-      const span = document.createElement('div');
-      span.className = 'tag';
+      const span = document.createElement('div'); span.className = 'tag';
       span.innerHTML = `${tag} <span onclick="removeTag('${containerId}', ${idx})">&times;</span>`;
       container.appendChild(span);
     });
@@ -314,9 +425,8 @@ HTML_UI = """<!DOCTYPE html>
 
   window.removeTag = function(containerId, idx) {
     const arrKey = containerId === 'seedContainer' ? 'seeds' : 'niches';
-    config[arrKey].splice(idx, 1);
-    saveConfig();
-    renderTags(containerId, config[arrKey]);
+    masterData.profiles[masterData.activeProfile][arrKey].splice(idx, 1);
+    saveMaster(); renderTags(containerId, masterData.profiles[masterData.activeProfile][arrKey]);
   }
 
   // --- 4. BASE MANAGER (UI) ---
@@ -326,20 +436,17 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function renderChannelGrid() {
-    const grid = document.getElementById('channelGrid');
-    grid.innerHTML = '';
-    const keys = Object.keys(baseChannels);
+    const grid = document.getElementById('channelGrid'); grid.innerHTML = '';
+    const channels = masterData.profiles[masterData.activeProfile].channels;
+    const keys = Object.keys(channels);
     document.getElementById('baseCount').innerText = `${keys.length} Saved`;
 
     keys.forEach(cId => {
-      const c = baseChannels[cId];
-      const div = document.createElement('div');
-      div.className = 'channel-card';
+      const c = channels[cId];
+      const div = document.createElement('div'); div.className = 'channel-card';
       div.innerHTML = `
         <img src="${c.logo || 'https://via.placeholder.com/36'}" alt="logo">
-        <div class="c-info">
-          <div class="c-name">${c.title}</div>
-        </div>
+        <div class="c-info"><div class="c-name">${c.title}</div></div>
         <div class="c-del" onclick="deleteChannel('${cId}')">&times;</div>
       `;
       grid.appendChild(div);
@@ -347,40 +454,37 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   window.deleteChannel = function(cId) {
-    delete baseChannels[cId];
-    localStorage.setItem('base_channels', JSON.stringify(baseChannels));
-    syncBackend();
-    renderChannelGrid();
+    delete masterData.profiles[masterData.activeProfile].channels[cId];
+    saveMaster(); syncBackend(); renderChannelGrid();
   }
 
   // --- 5. PIPELINE EXECUTION ---
   function setStatus(msg, type = '') {
-    const el = document.getElementById('mainStatus');
-    el.textContent = msg; el.className = 'status ' + type;
+    const el = document.getElementById('mainStatus'); el.textContent = msg; el.className = 'status ' + type;
   }
 
   function runPipeline(actionType) {
-    if (!config.apiKey) return setStatus("API Key required in Settings.", "error");
+    if (!masterData.apiKey) return setStatus("Global API Key required in Settings.", "error");
     
     document.getElementById('btnDiscover').disabled = true;
     document.getElementById('btnAnalyze').disabled = true;
     document.getElementById('tableContainer').style.display = 'none';
 
+    const pData = masterData.profiles[masterData.activeProfile];
     let url = '';
+
     if (actionType === 'discover') {
-      if (config.seeds.length === 0 || config.niches.length === 0) {
-        setStatus("Seeds and Niche tags are required for Discovery.", "error");
-        enableBtns(); return;
+      if (pData.seeds.length === 0 || pData.niches.length === 0) {
+        setStatus("Seeds and Niche tags are required for Discovery.", "error"); enableBtns(); return;
       }
-      const sParams = encodeURIComponent(config.seeds.join(','));
-      const nParams = encodeURIComponent(config.niches.join(','));
-      url = `/api/discover?api_key=${config.apiKey}&seeds=${sParams}&niches=${nParams}&threshold=${config.threshold}`;
+      const sParams = encodeURIComponent(pData.seeds.join(','));
+      const nParams = encodeURIComponent(pData.niches.join(','));
+      url = `/api/discover?api_key=${masterData.apiKey}&seeds=${sParams}&niches=${nParams}&threshold=${pData.threshold}&period=${pData.dateFilter}&vtype=${pData.typeFilter}&max=${pData.maxResults}`;
     } else {
-      if (Object.keys(baseChannels).length === 0) {
-        setStatus("Your Base List is empty. Run Discovery first.", "error");
-        enableBtns(); return;
+      if (Object.keys(pData.channels).length === 0) {
+        setStatus("Your Base List for this profile is empty. Run Discovery first.", "error"); enableBtns(); return;
       }
-      url = `/api/analyze?api_key=${config.apiKey}`;
+      url = `/api/analyze?api_key=${masterData.apiKey}`;
     }
 
     const eventSource = new EventSource(url);
@@ -388,15 +492,10 @@ HTML_UI = """<!DOCTYPE html>
     eventSource.onmessage = function(event) {
       const data = JSON.parse(event.data);
       
-      if (data.status === 'progress') {
-        setStatus(data.msg, "active");
-      } 
+      if (data.status === 'progress') setStatus(data.msg, "active");
       else if (data.status === 'channel_found') {
-        // Permanently add new channel to browser master list
-        baseChannels[data.channel.id] = data.channel.data;
-        localStorage.setItem('base_channels', JSON.stringify(baseChannels));
-        syncBackend();
-        renderChannelGrid();
+        masterData.profiles[masterData.activeProfile].channels[data.channel.id] = data.channel.data;
+        saveMaster(); syncBackend(); renderChannelGrid();
       }
       else if (data.status === 'done') {
         setStatus(data.msg, "success");
@@ -404,13 +503,11 @@ HTML_UI = """<!DOCTYPE html>
         eventSource.close(); enableBtns();
       } 
       else if (data.status === 'error') {
-        setStatus("Error: " + data.msg, "error");
-        eventSource.close(); enableBtns();
+        setStatus("Error: " + data.msg, "error"); eventSource.close(); enableBtns();
       }
     };
     eventSource.onerror = function() {
-      setStatus("Stream finished or disconnected.", "success");
-      eventSource.close(); enableBtns();
+      setStatus("Stream finished or disconnected.", "success"); eventSource.close(); enableBtns();
     };
   }
 
@@ -455,7 +552,6 @@ def index():
 
 @app.route("/api/sync-channels", methods=["POST"])
 def sync_channels():
-    # Frontend master list pushes here so the backend can use it for Analysis
     global BASE_CHANNELS
     BASE_CHANNELS = request.json or {}
     return jsonify({"success": True})
@@ -466,6 +562,11 @@ def auto_discover():
     seeds = request.args.get('seeds', '').split(',')
     niche_keywords = [k.strip().lower() for k in request.args.get('niches', '').split(',') if k.strip()]
     threshold = int(request.args.get('threshold', 5))
+    
+    # New Discovery Parameters
+    period = int(request.args.get('period', 7))
+    max_res = int(request.args.get('max', 15))
+    vid_type = request.args.get('vtype', 'any')
 
     def generate():
         def emit(status, msg="", data=None, channel_info=None):
@@ -477,12 +578,23 @@ def auto_discover():
         try:
             youtube = build('youtube', 'v3', developerKey=api_key)
             new_channels = set()
+            after_date = (datetime.now(timezone.utc) - timedelta(days=period)).isoformat()
 
-            # 1. Search across all seed tags
             for seed in seeds:
                 if not seed.strip(): continue
                 yield emit('progress', f'Searching seed tag: "{seed}"...')
-                search_res = youtube.search().list(q=seed.strip(), part="snippet", type="video", order="date", maxResults=15).execute()
+                
+                # Applying custom Date, Max Results, and Video Duration filters
+                search_res = youtube.search().list(
+                    q=seed.strip(), 
+                    part="snippet", 
+                    type="video", 
+                    order="date", 
+                    publishedAfter=after_date,
+                    maxResults=max_res,
+                    videoDuration=vid_type if vid_type in ['short', 'long', 'any'] else 'any'
+                ).execute()
+                
                 for item in search_res.get('items', []):
                     c_id = item['snippet']['channelId']
                     if c_id not in BASE_CHANNELS:
@@ -490,7 +602,6 @@ def auto_discover():
 
             yield emit('progress', f'Extracted {len(new_channels)} undocumented channels. Running Niche Verification...')
 
-            # 2. Qualify Channels
             new_channels = list(new_channels)
             if new_channels:
                 for i in range(0, len(new_channels), 50):
@@ -507,7 +618,6 @@ def auto_discover():
                         except KeyError:
                             continue 
 
-                        # Check last 30 videos
                         pl_res = youtube.playlistItems().list(part="snippet", playlistId=uploads_id, maxResults=30).execute()
                         
                         match_count = 0
@@ -518,12 +628,11 @@ def auto_discover():
                         if match_count >= threshold:
                             channel_data = {"title": c_title, "uploads_id": uploads_id, "logo": logo}
                             BASE_CHANNELS[c_id] = channel_data
-                            # Stream directly to browser storage
                             yield emit('channel_found', f'✅ Added to Base: {c_title} ({match_count} matches)', channel_info={"id": c_id, "data": channel_data})
                         else:
                             yield emit('progress', f'❌ Discarded: {c_title} ({match_count} matches)')
 
-            yield emit('done', f'Discovery Sequence Complete. Saved {len(BASE_CHANNELS)} total channels to Base.')
+            yield emit('done', f'Discovery Sequence Complete. Base now contains {len(BASE_CHANNELS)} channels.')
 
         except Exception as e:
             yield emit('error', str(e))
@@ -573,7 +682,6 @@ def auto_analyze():
                         views = int(v_item['statistics'].get('viewCount', 0))
                         vph = views / max(age_hours, 1)
                         
-                        # Extract Video Thumbnail
                         try:
                             thumb = v_item['snippet']['thumbnails']['medium']['url']
                         except KeyError:
