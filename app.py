@@ -2,8 +2,8 @@ from flask import Flask, request, Response, jsonify
 from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import datetime, timezone, timedelta
+import requests
 import json
-import re
 import os
 
 app = Flask(__name__)
@@ -88,7 +88,7 @@ HTML_UI = """<!DOCTYPE html>
     padding: 10px 14px; min-height: 52px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
   }
   .tag-container input, .tag-container select {
-    background: transparent; border: none; color: var(--ink); font-size: 14px; outline: none; flex: 1; min-width: 100px;
+    background: transparent; border: none; color: var(--ink); font-size: 14px; outline: none; flex: 1; min-width: 100px; cursor: pointer;
   }
   .tag-container select option { background: #1a1a1a; color: #fff; }
   .tag {
@@ -216,16 +216,21 @@ HTML_UI = """<!DOCTYPE html>
         </select></div>
       </div>
       <div class="filter-col">
-        <label>Video Type (Discovery)</label>
+        <label>Format Filter (Strict)</label>
         <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
-          <option value="any">All Videos</option>
-          <option value="short">Shorts Only (<= 4 min)</option>
-          <option value="long">Long Form (>= 20 min)</option>
+          <option value="any">Any Format</option>
+          <option value="short">Shorts Only (True Vertical)</option>
+          <option value="long">Long Form Only</option>
         </select></div>
       </div>
       <div class="filter-col">
-        <label>Max Results (Per Seed)</label>
-        <div class="tag-container" style="min-height: 44px;"><input type="number" id="maxResults" value="15" onchange="saveProfile()"></div>
+        <label>Max Search Results</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="maxResults" onchange="saveProfile()">
+          <option value="10">10 Results</option>
+          <option value="15">15 Results</option>
+          <option value="25">25 Results</option>
+          <option value="50" selected>50 Results (Max)</option>
+        </select></div>
       </div>
       <div class="filter-col">
         <label>Qual. Threshold (Matches)</label>
@@ -262,7 +267,7 @@ HTML_UI = """<!DOCTYPE html>
     profiles: {
       'Default': { 
         seeds: [], niches: [], threshold: 5, 
-        dateFilter: '7', typeFilter: 'any', maxResults: 15,
+        dateFilter: '7', typeFilter: 'any', maxResults: 50,
         channels: {} 
       }
     }
@@ -301,7 +306,7 @@ HTML_UI = """<!DOCTYPE html>
 
   // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function loadPermanentData() {
-    const savedMaster = localStorage.getItem('app_master_v2');
+    const savedMaster = localStorage.getItem('app_master_v3');
     if (savedMaster) {
       masterData = JSON.parse(savedMaster);
     } 
@@ -316,7 +321,7 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function saveMaster() {
-    localStorage.setItem('app_master_v2', JSON.stringify(masterData));
+    localStorage.setItem('app_master_v3', JSON.stringify(masterData));
   }
 
   function renderProfileDropdown() {
@@ -337,10 +342,10 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function createProfile() {
-    const pName = prompt("Enter new Profile Name:");
+    const pName = prompt("Enter new Workspace Profile Name:");
     if (pName && pName.trim() !== '') {
       if (!masterData.profiles[pName]) {
-        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', typeFilter: 'any', maxResults: 15, channels: {} };
+        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', typeFilter: 'any', maxResults: 50, channels: {} };
         masterData.activeProfile = pName;
         saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
       } else { alert("Profile name already exists."); }
@@ -349,7 +354,7 @@ HTML_UI = """<!DOCTYPE html>
 
   function deleteProfile() {
     const active = masterData.activeProfile;
-    if (active === 'Default') return alert("Cannot delete the Default profile.");
+    if (active === 'Default') return alert("Cannot delete the Default workspace.");
     if (confirm(`Are you sure you want to delete workspace "${active}"?`)) {
       delete masterData.profiles[active];
       masterData.activeProfile = 'Default';
@@ -360,18 +365,14 @@ HTML_UI = """<!DOCTYPE html>
   function loadActiveProfileUI() {
     const pData = masterData.profiles[masterData.activeProfile];
     
-    // Set form fields
     document.getElementById('thresholdInput').value = pData.threshold || 5;
     document.getElementById('dateFilter').value = pData.dateFilter || '7';
     document.getElementById('typeFilter').value = pData.typeFilter || 'any';
-    document.getElementById('maxResults').value = pData.maxResults || 15;
+    document.getElementById('maxResults').value = pData.maxResults || 50;
     
-    // Render Tags & Channels
     renderTags('seedContainer', pData.seeds);
     renderTags('nicheContainer', pData.niches);
     renderChannelGrid();
-    
-    // Sync active channels to backend instantly
     syncBackend();
   }
 
@@ -380,7 +381,7 @@ HTML_UI = """<!DOCTYPE html>
     masterData.profiles[active].threshold = parseInt(document.getElementById('thresholdInput').value) || 5;
     masterData.profiles[active].dateFilter = document.getElementById('dateFilter').value;
     masterData.profiles[active].typeFilter = document.getElementById('typeFilter').value;
-    masterData.profiles[active].maxResults = parseInt(document.getElementById('maxResults').value) || 15;
+    masterData.profiles[active].maxResults = parseInt(document.getElementById('maxResults').value) || 50;
     saveMaster();
   }
 
@@ -484,7 +485,7 @@ HTML_UI = """<!DOCTYPE html>
       if (Object.keys(pData.channels).length === 0) {
         setStatus("Your Base List for this profile is empty. Run Discovery first.", "error"); enableBtns(); return;
       }
-      url = `/api/analyze?api_key=${masterData.apiKey}`;
+      url = `/api/analyze?api_key=${masterData.apiKey}&vtype=${pData.typeFilter}`;
     }
 
     const eventSource = new EventSource(url);
@@ -563,9 +564,8 @@ def auto_discover():
     niche_keywords = [k.strip().lower() for k in request.args.get('niches', '').split(',') if k.strip()]
     threshold = int(request.args.get('threshold', 5))
     
-    # New Discovery Parameters
     period = int(request.args.get('period', 7))
-    max_res = int(request.args.get('max', 15))
+    max_res = int(request.args.get('max', 50))
     vid_type = request.args.get('vtype', 'any')
 
     def generate():
@@ -579,12 +579,16 @@ def auto_discover():
             youtube = build('youtube', 'v3', developerKey=api_key)
             new_channels = set()
             after_date = (datetime.now(timezone.utc) - timedelta(days=period)).isoformat()
+            
+            # Map strict UI filter to API standard (API only accepts 'short', 'long', 'medium', 'any')
+            api_duration_param = 'any'
+            if vid_type == 'short': api_duration_param = 'short'
+            if vid_type == 'long': api_duration_param = 'long'
 
             for seed in seeds:
                 if not seed.strip(): continue
-                yield emit('progress', f'Searching seed tag: "{seed}"...')
+                yield emit('progress', f'Searching seed tag: "{seed}" (Max: {max_res})...')
                 
-                # Applying custom Date, Max Results, and Video Duration filters
                 search_res = youtube.search().list(
                     q=seed.strip(), 
                     part="snippet", 
@@ -592,7 +596,7 @@ def auto_discover():
                     order="date", 
                     publishedAfter=after_date,
                     maxResults=max_res,
-                    videoDuration=vid_type if vid_type in ['short', 'long', 'any'] else 'any'
+                    videoDuration=api_duration_param
                 ).execute()
                 
                 for item in search_res.get('items', []):
@@ -643,6 +647,7 @@ def auto_discover():
 @app.route('/api/analyze', methods=['GET'])
 def auto_analyze():
     api_key = request.args.get('api_key')
+    vid_type = request.args.get('vtype', 'any')
 
     def generate():
         def emit(status, msg="", data=None):
@@ -652,7 +657,8 @@ def auto_analyze():
 
         try:
             youtube = build('youtube', 'v3', developerKey=api_key)
-            all_shorts = []
+            req_session = requests.Session() # Reuse TCP connection for blazing fast URL checks
+            all_videos = []
             
             total_base = len(BASE_CHANNELS)
             yield emit('progress', f'Initializing scrape sequence for {total_base} Base Channels...')
@@ -667,39 +673,47 @@ def auto_analyze():
 
                 if not v_ids: continue
 
-                v_res = youtube.videos().list(part="snippet,statistics,contentDetails", id=",".join(v_ids)).execute()
+                v_res = youtube.videos().list(part="snippet,statistics", id=",".join(v_ids)).execute()
 
                 for v_item in v_res.get('items', []):
-                    duration_str = v_item['contentDetails']['duration']
-                    match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
-                    if not match: continue
-                    h, m, s = int(match.group(1) or 0), int(match.group(2) or 0), int(match.group(3) or 0)
-                    total_seconds = h * 3600 + m * 60 + s
-
-                    if total_seconds <= 60:
-                        pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
-                        age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
-                        views = int(v_item['statistics'].get('viewCount', 0))
-                        vph = views / max(age_hours, 1)
-                        
+                    v_id = v_item['id']
+                    
+                    # STRICT TRUE-VERTICAL SHORTS VERIFICATION
+                    if vid_type != 'any':
+                        is_short = False
                         try:
-                            thumb = v_item['snippet']['thumbnails']['medium']['url']
-                        except KeyError:
-                            thumb = v_item['snippet']['thumbnails']['default']['url']
+                            # YouTube returns HTTP 200 for true Shorts, and 303 Redirect for Long Form. 
+                            r = req_session.head(f"https://www.youtube.com/shorts/{v_id}", allow_redirects=False, timeout=3)
+                            is_short = (r.status_code == 200)
+                        except:
+                            is_short = False
 
-                        all_shorts.append({
-                            "title": v_item['snippet']['title'],
-                            "channel": c_data['title'],
-                            "logo": c_data.get('logo', ''),
-                            "thumbnail": thumb,
-                            "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
-                            "videoLink": f"https://www.youtube.com/watch?v={v_item['id']}",
-                            "channelLink": f"https://www.youtube.com/channel/{c_id}"
-                        })
+                        if vid_type == 'short' and not is_short: continue
+                        if vid_type == 'long' and is_short: continue
+
+                    pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
+                    age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
+                    views = int(v_item['statistics'].get('viewCount', 0))
+                    vph = views / max(age_hours, 1)
+                    
+                    try:
+                        thumb = v_item['snippet']['thumbnails']['medium']['url']
+                    except KeyError:
+                        thumb = v_item['snippet']['thumbnails']['default']['url']
+
+                    all_videos.append({
+                        "title": v_item['snippet']['title'],
+                        "channel": c_data['title'],
+                        "logo": c_data.get('logo', ''),
+                        "thumbnail": thumb,
+                        "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
+                        "videoLink": f"https://www.youtube.com/watch?v={v_id}",
+                        "channelLink": f"https://www.youtube.com/channel/{c_id}"
+                    })
 
             yield emit('progress', 'Sorting matrix by View Velocity...')
-            all_shorts.sort(key=lambda x: x['vph'], reverse=True)
-            yield emit('done', 'Base Analysis Complete!', all_shorts[:100])
+            all_videos.sort(key=lambda x: x['vph'], reverse=True)
+            yield emit('done', 'Base Analysis Complete!', all_videos[:100])
 
         except Exception as e:
             yield emit('error', str(e))
