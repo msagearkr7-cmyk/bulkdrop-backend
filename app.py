@@ -2,6 +2,7 @@ from flask import Flask, request, Response, jsonify
 from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import datetime, timezone, timedelta
+import concurrent.futures
 import requests
 import json
 import os
@@ -47,7 +48,6 @@ HTML_UI = """<!DOCTYPE html>
   body::after { bottom: -14%; right: -12%; width: 42vw; height: 42vw; background: #bf5af2; animation-delay: -6s; }
   @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(4%, 4%) scale(1.12); } }
 
-  /* Login Overlay */
   #loginOverlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px);
     z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -68,7 +68,7 @@ HTML_UI = """<!DOCTYPE html>
   .brand-mark { display: block; font-size: 30px; font-weight: 700; color: #fff; }
   .brand-sub { display: block; margin-top: 5px; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); }
 
-  .box { width: 100%; max-width: 900px; }
+  .box { width: 100%; max-width: 1000px; }
   .glass-panel {
     background: var(--glass-fill); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
     border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.45);
@@ -82,7 +82,6 @@ HTML_UI = """<!DOCTYPE html>
   .btn-icon:hover { background: rgba(255,255,255,0.2); }
   .btn-del-profile { color: #ff453a; margin-left: 4px; }
 
-  /* Tag Inputs & Form Controls */
   .tag-container {
     background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border-soft); border-radius: var(--radius-md);
     padding: 10px 14px; min-height: 52px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
@@ -98,11 +97,10 @@ HTML_UI = """<!DOCTYPE html>
   .tag span { cursor: pointer; color: rgba(255,255,255,0.5); }
   .tag span:hover { color: #ff453a; }
 
-  .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .filter-col { display: flex; flex-direction: column; gap: 6px; }
   .filter-col label { font-size: 11px; color: var(--ink-dim); font-weight: 600; text-transform: uppercase; }
 
-  /* Split Buttons */
   .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
   button.solid {
     padding: 16px; font-size: 14px; font-weight: 600; border-radius: 16px; border: none; cursor: pointer; transition: all 0.15s; font-family: inherit;
@@ -112,7 +110,6 @@ HTML_UI = """<!DOCTYPE html>
   .btn-discover { background: var(--accent-purple); color: #fff; }
   .btn-analyze { background: var(--accent); color: #fff; }
 
-  /* Channel Manager & Settings */
   .settings-panel { display: none; background: rgba(0,0,0,0.4); border-radius: var(--radius-md); padding: 20px; margin-bottom: 24px; border: 1px solid var(--glass-border-soft); }
   .channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; margin-top: 16px; padding-right: 8px; }
   .channel-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 12px; }
@@ -124,7 +121,6 @@ HTML_UI = """<!DOCTYPE html>
   .status { font-size: 13px; font-weight: 500; color: var(--ink-dim); min-height: 20px; margin-top: 20px; text-align: center; }
   .status.active { color: var(--accent-2); }
   
-  /* Output Table */
   .table-container { width: 100%; overflow-x: auto; max-height: 600px; overflow-y: auto; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border-soft); margin-top: 24px; display: none; }
   .glass-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; white-space: nowrap; }
   .glass-table th { position: sticky; top: 0; background: rgba(30, 30, 35, 0.9); backdrop-filter: blur(12px); color: var(--ink-dim); font-weight: 600; padding: 12px 16px; z-index: 2; }
@@ -135,6 +131,7 @@ HTML_UI = """<!DOCTYPE html>
   .logo-img { width: 24px; height: 24px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
   
   .badge { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; background: rgba(191, 90, 242, 0.2); color: #bf5af2;}
+  .date-badge { color: var(--ink-dim); font-size: 11px; font-weight: 500; }
   .table-btn { font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; text-decoration: none; transition: 0.2s; margin-right: 4px; }
   .table-btn:hover { background: rgba(255,255,255,0.2); }
   .trunc { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
@@ -207,24 +204,7 @@ HTML_UI = """<!DOCTYPE html>
     <!-- Advanced Filters -->
     <div class="filter-grid">
       <div class="filter-col">
-        <label>Upload Date (Discovery)</label>
-        <div class="tag-container" style="min-height: 44px;"><select id="dateFilter" onchange="saveProfile()">
-          <option value="1">Today</option>
-          <option value="7" selected>This Week</option>
-          <option value="30">This Month</option>
-          <option value="365">This Year</option>
-        </select></div>
-      </div>
-      <div class="filter-col">
-        <label>Format Filter (Strict)</label>
-        <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
-          <option value="any">Any Format</option>
-          <option value="short">Shorts Only (True Vertical)</option>
-          <option value="long">Long Form Only</option>
-        </select></div>
-      </div>
-      <div class="filter-col">
-        <label>Max Search Results</label>
+        <label>Discovery Max Results</label>
         <div class="tag-container" style="min-height: 44px;"><select id="maxResults" onchange="saveProfile()">
           <option value="10">10 Results</option>
           <option value="15">15 Results</option>
@@ -233,9 +213,36 @@ HTML_UI = """<!DOCTYPE html>
         </select></div>
       </div>
       <div class="filter-col">
-        <label>Qual. Threshold (Matches)</label>
-        <div class="tag-container" style="min-height: 44px;"><input type="number" id="thresholdInput" value="5" onchange="saveProfile()"></div>
+        <label>Discovery Upload Date</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="dateFilter" onchange="saveProfile()">
+          <option value="1">Today</option>
+          <option value="7" selected>This Week</option>
+          <option value="30">This Month</option>
+          <option value="365">This Year</option>
+        </select></div>
       </div>
+      <div class="filter-col">
+        <label>Video Format (Strict)</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
+          <option value="any">Any Format</option>
+          <option value="short">Shorts Only (Vertical)</option>
+          <option value="long">Long Form Only</option>
+        </select></div>
+      </div>
+      <div class="filter-col">
+        <label>Analysis Depth / Channel</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="analyzeDepth" onchange="saveProfile()">
+          <option value="10">Last 10 Videos</option>
+          <option value="15" selected>Last 15 Videos</option>
+          <option value="30">Last 30 Videos</option>
+          <option value="50">Last 50 Videos</option>
+        </select></div>
+      </div>
+    </div>
+    
+    <div class="filter-col" style="margin-top: -4px;">
+      <label>Qualification Threshold</label>
+      <div class="tag-container" style="min-height: 44px;"><input type="number" id="thresholdInput" value="5" placeholder="Minimum keyword matches" onchange="saveProfile()"></div>
     </div>
 
     <!-- Action Buttons -->
@@ -267,7 +274,7 @@ HTML_UI = """<!DOCTYPE html>
     profiles: {
       'Default': { 
         seeds: [], niches: [], threshold: 5, 
-        dateFilter: '7', typeFilter: 'any', maxResults: 50,
+        dateFilter: '7', typeFilter: 'any', maxResults: 50, analyzeDepth: 15,
         channels: {} 
       }
     }
@@ -306,7 +313,7 @@ HTML_UI = """<!DOCTYPE html>
 
   // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function loadPermanentData() {
-    const savedMaster = localStorage.getItem('app_master_v3');
+    const savedMaster = localStorage.getItem('app_master_v3_1');
     if (savedMaster) {
       masterData = JSON.parse(savedMaster);
     } 
@@ -321,7 +328,7 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function saveMaster() {
-    localStorage.setItem('app_master_v3', JSON.stringify(masterData));
+    localStorage.setItem('app_master_v3_1', JSON.stringify(masterData));
   }
 
   function renderProfileDropdown() {
@@ -345,7 +352,7 @@ HTML_UI = """<!DOCTYPE html>
     const pName = prompt("Enter new Workspace Profile Name:");
     if (pName && pName.trim() !== '') {
       if (!masterData.profiles[pName]) {
-        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', typeFilter: 'any', maxResults: 50, channels: {} };
+        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', typeFilter: 'any', maxResults: 50, analyzeDepth: 15, channels: {} };
         masterData.activeProfile = pName;
         saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
       } else { alert("Profile name already exists."); }
@@ -369,6 +376,7 @@ HTML_UI = """<!DOCTYPE html>
     document.getElementById('dateFilter').value = pData.dateFilter || '7';
     document.getElementById('typeFilter').value = pData.typeFilter || 'any';
     document.getElementById('maxResults').value = pData.maxResults || 50;
+    document.getElementById('analyzeDepth').value = pData.analyzeDepth || 15;
     
     renderTags('seedContainer', pData.seeds);
     renderTags('nicheContainer', pData.niches);
@@ -382,6 +390,7 @@ HTML_UI = """<!DOCTYPE html>
     masterData.profiles[active].dateFilter = document.getElementById('dateFilter').value;
     masterData.profiles[active].typeFilter = document.getElementById('typeFilter').value;
     masterData.profiles[active].maxResults = parseInt(document.getElementById('maxResults').value) || 50;
+    masterData.profiles[active].analyzeDepth = parseInt(document.getElementById('analyzeDepth').value) || 15;
     saveMaster();
   }
 
@@ -485,7 +494,7 @@ HTML_UI = """<!DOCTYPE html>
       if (Object.keys(pData.channels).length === 0) {
         setStatus("Your Base List for this profile is empty. Run Discovery first.", "error"); enableBtns(); return;
       }
-      url = `/api/analyze?api_key=${masterData.apiKey}&vtype=${pData.typeFilter}`;
+      url = `/api/analyze?api_key=${masterData.apiKey}&vtype=${pData.typeFilter}&depth=${pData.analyzeDepth}`;
     }
 
     const eventSource = new EventSource(url);
@@ -524,7 +533,8 @@ HTML_UI = """<!DOCTYPE html>
     const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
 
-    thead.innerHTML = `<tr><th>Video</th><th>Title</th><th>Base Channel</th><th>Views</th><th>Velocity (VPH)</th><th>Links</th></tr>`;
+    // Added Published Date Column
+    thead.innerHTML = `<tr><th>Video</th><th>Title</th><th>Base Channel</th><th>Published</th><th>Views</th><th>Velocity (VPH)</th><th>Links</th></tr>`;
     
     let html = '';
     results.forEach(r => {
@@ -532,6 +542,7 @@ HTML_UI = """<!DOCTYPE html>
         <td><img class="thumb-img" src="${r.thumbnail}" alt="thumb"></td>
         <td class="trunc" title="${r.title}">${r.title}</td>
         <td><img class="logo-img" src="${r.logo}">${r.channel}</td>
+        <td class="date-badge">${r.published}</td>
         <td>${r.views.toLocaleString()} 👁️</td>
         <td><span class="badge">🔥 ${r.vph.toLocaleString()}/hr</span></td>
         <td>
@@ -580,7 +591,6 @@ def auto_discover():
             new_channels = set()
             after_date = (datetime.now(timezone.utc) - timedelta(days=period)).isoformat()
             
-            # Map strict UI filter to API standard (API only accepts 'short', 'long', 'medium', 'any')
             api_duration_param = 'any'
             if vid_type == 'short': api_duration_param = 'short'
             if vid_type == 'long': api_duration_param = 'long'
@@ -648,6 +658,8 @@ def auto_discover():
 def auto_analyze():
     api_key = request.args.get('api_key')
     vid_type = request.args.get('vtype', 'any')
+    # Using the new depth parameter
+    analyze_depth = int(request.args.get('depth', 15))
 
     def generate():
         def emit(status, msg="", data=None):
@@ -657,59 +669,70 @@ def auto_analyze():
 
         try:
             youtube = build('youtube', 'v3', developerKey=api_key)
-            req_session = requests.Session() # Reuse TCP connection for blazing fast URL checks
+            req_session = requests.Session() 
             all_videos = []
-            
             total_base = len(BASE_CHANNELS)
-            yield emit('progress', f'Initializing scrape sequence for {total_base} Base Channels...')
+            
+            yield emit('progress', f'Initializing scrape sequence for {total_base} Base Channels (Depth: {analyze_depth})...')
+
+            # Helper function for threading the strict HTTP ping checking
+            def check_video_format(v_item, c_data, c_id):
+                v_id = v_item['id']
+                
+                # STRICT TRUE-VERTICAL SHORTS VERIFICATION
+                if vid_type != 'any':
+                    is_short = False
+                    try:
+                        r = req_session.head(f"https://www.youtube.com/shorts/{v_id}", allow_redirects=False, timeout=3)
+                        is_short = (r.status_code == 200)
+                    except:
+                        pass
+
+                    if vid_type == 'short' and not is_short: return None
+                    if vid_type == 'long' and is_short: return None
+
+                pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
+                date_str = pub_date.strftime("%b %d, %Y") # Format the date to e.g., Oct 04, 2026
+                age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
+                views = int(v_item['statistics'].get('viewCount', 0))
+                vph = views / max(age_hours, 1)
+                
+                try:
+                    thumb = v_item['snippet']['thumbnails']['medium']['url']
+                except KeyError:
+                    thumb = v_item['snippet']['thumbnails']['default']['url']
+
+                return {
+                    "title": v_item['snippet']['title'],
+                    "channel": c_data['title'],
+                    "logo": c_data.get('logo', ''),
+                    "thumbnail": thumb,
+                    "published": date_str,
+                    "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
+                    "videoLink": f"https://www.youtube.com/watch?v={v_id}",
+                    "channelLink": f"https://www.youtube.com/channel/{c_id}"
+                }
 
             for idx, (c_id, c_data) in enumerate(BASE_CHANNELS.items()):
                 yield emit('progress', f'[{idx+1}/{total_base}] Analyzing {c_data["title"]}...')
                 uploads_id = c_data.get('uploads_id')
                 if not uploads_id: continue
 
-                pl_res = youtube.playlistItems().list(part="contentDetails", playlistId=uploads_id, maxResults=15).execute()
+                # Pull the exact number of videos the user requested from the UI dropdown
+                pl_res = youtube.playlistItems().list(part="contentDetails", playlistId=uploads_id, maxResults=analyze_depth).execute()
                 v_ids = [item['contentDetails']['videoId'] for item in pl_res.get('items', [])]
 
                 if not v_ids: continue
 
                 v_res = youtube.videos().list(part="snippet,statistics", id=",".join(v_ids)).execute()
 
-                for v_item in v_res.get('items', []):
-                    v_id = v_item['id']
-                    
-                    # STRICT TRUE-VERTICAL SHORTS VERIFICATION
-                    if vid_type != 'any':
-                        is_short = False
-                        try:
-                            # YouTube returns HTTP 200 for true Shorts, and 303 Redirect for Long Form. 
-                            r = req_session.head(f"https://www.youtube.com/shorts/{v_id}", allow_redirects=False, timeout=3)
-                            is_short = (r.status_code == 200)
-                        except:
-                            is_short = False
-
-                        if vid_type == 'short' and not is_short: continue
-                        if vid_type == 'long' and is_short: continue
-
-                    pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
-                    age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
-                    views = int(v_item['statistics'].get('viewCount', 0))
-                    vph = views / max(age_hours, 1)
-                    
-                    try:
-                        thumb = v_item['snippet']['thumbnails']['medium']['url']
-                    except KeyError:
-                        thumb = v_item['snippet']['thumbnails']['default']['url']
-
-                    all_videos.append({
-                        "title": v_item['snippet']['title'],
-                        "channel": c_data['title'],
-                        "logo": c_data.get('logo', ''),
-                        "thumbnail": thumb,
-                        "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
-                        "videoLink": f"https://www.youtube.com/watch?v={v_id}",
-                        "channelLink": f"https://www.youtube.com/channel/{c_id}"
-                    })
+                # Multithread the videos for this channel simultaneously (Massive speed boost)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=analyze_depth) as executor:
+                    futures = [executor.submit(check_video_format, v_item, c_data, c_id) for v_item in v_res.get('items', [])]
+                    for future in concurrent.futures.as_completed(futures):
+                        result = future.result()
+                        if result:
+                            all_videos.append(result)
 
             yield emit('progress', 'Sorting matrix by View Velocity...')
             all_videos.sort(key=lambda x: x['vph'], reverse=True)
