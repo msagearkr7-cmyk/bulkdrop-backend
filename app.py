@@ -1,32 +1,31 @@
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import datetime, timezone
 import json
-import os
 import re
+import os
 
 app = Flask(__name__)
+
+# Backend in-memory store (continuously synced by the frontend to survive Render wipes)
+BASE_CHANNELS = {}
 
 HTML_UI = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Research Tool Pro</title>
+<title>Research Tool Pro | Base Command</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-
   :root {
     --glass-fill: rgba(255, 255, 255, 0.07);
-    --glass-fill-strong: rgba(255, 255, 255, 0.12);
     --glass-border: rgba(255, 255, 255, 0.14);
     --glass-border-soft: rgba(255, 255, 255, 0.07);
     --ink: #f5f5f7;
     --ink-dim: rgba(245, 245, 247, 0.55);
-    --ink-faint: rgba(245, 245, 247, 0.32);
     --accent: #0a84ff;
-    --accent-2: #64d2ff;
     --accent-purple: #bf5af2;
     --radius-lg: 28px;
     --radius-md: 18px;
@@ -35,7 +34,7 @@ HTML_UI = """<!DOCTYPE html>
 
   body {
     background: #030304; color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, sans-serif;
     min-height: 100vh; display: flex; flex-direction: column; align-items: center;
     padding: 56px 20px 40px; position: relative; overflow-x: hidden;
   }
@@ -48,383 +47,402 @@ HTML_UI = """<!DOCTYPE html>
   body::after { bottom: -14%; right: -12%; width: 42vw; height: 42vw; background: #bf5af2; animation-delay: -6s; }
   @keyframes drift { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(4%, 4%) scale(1.12); } }
 
+  /* Login Overlay */
+  #loginOverlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(20px);
+    z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .login-box {
+    background: var(--glass-fill); border: 1px solid var(--glass-border); padding: 40px;
+    border-radius: var(--radius-lg); text-align: center; width: 100%; max-width: 400px;
+  }
+  .login-box h2 { margin-bottom: 10px; font-size: 22px; }
+  .login-box p { color: var(--ink-dim); font-size: 13px; margin-bottom: 24px; }
+  .login-input {
+    width: 100%; padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border-soft);
+    background: rgba(0,0,0,0.5); color: #fff; font-size: 16px; text-align: center; margin-bottom: 16px; outline: none; letter-spacing: 4px;
+  }
+  .login-input:focus { border-color: var(--accent); }
+
   .brand { text-align: center; margin-bottom: 28px; }
-  .brand-mark { display: block; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: #fff; }
-  .brand-sub { display: block; margin-top: 5px; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+  .brand-mark { display: block; font-size: 30px; font-weight: 700; color: #fff; }
+  .brand-sub { display: block; margin-top: 5px; font-size: 12px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); }
 
   .box { width: 100%; max-width: 900px; }
-
-  .glass {
-    position: relative; background: var(--glass-fill); -webkit-backdrop-filter: blur(28px) saturate(160%); backdrop-filter: blur(28px) saturate(160%);
-    border: 1px solid var(--glass-border); box-shadow: 0 1px 0 rgba(255,255,255,0.14) inset, 0 20px 50px rgba(0,0,0,0.45);
+  .glass-panel {
+    background: var(--glass-fill); -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
+    border: 1px solid var(--glass-border); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.45);
   }
 
-  .glass-panel { border-radius: var(--radius-lg); padding: 24px; margin-top: 16px; }
+  .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .header-row h3 { font-size: 16px; font-weight: 600; }
+  .btn-icon { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 8px 16px; border-radius: 99px; cursor: pointer; font-size: 12px; font-weight: 600; transition: 0.2s; }
+  .btn-icon:hover { background: rgba(255,255,255,0.2); }
 
-  .quick-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 750px; margin: 0 auto;}
-
-  .pill-glass {
-    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px;
-    padding: 13px 20px; font-size: 13px; font-weight: 600; color: var(--ink-dim); cursor: pointer; transition: all 0.2s;
+  /* Tag Inputs */
+  .tag-container {
+    background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border-soft); border-radius: var(--radius-md);
+    padding: 10px 14px; min-height: 56px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px;
   }
-  .pill-glass:active { transform: scale(0.97); }
-  .pill-glass.mode-active { color: #fff; background: var(--accent) !important; border-color: transparent; }
-  .pill-glass.mode-active.auto { background: var(--accent-purple) !important; }
-
-  .icon-glass {
-    flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; color: var(--ink-dim); cursor: pointer; transition: color 0.2s, transform 0.15s;
+  .tag-container input {
+    background: transparent; border: none; color: var(--ink); font-size: 14px; outline: none; flex: 1; min-width: 150px;
   }
-  .icon-glass:hover { color: #fff; }
-  .icon-glass:active { transform: scale(0.92); }
-  .icon-glass.is-open { color: var(--accent-2); }
-  .icon-glass svg { width: 18px; height: 18px; }
-
-  .settings-panel {
-    display: none; background: rgba(0,0,0,0.32); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px;
-    border: 1px solid var(--glass-border-soft); max-width: 650px; margin-left: auto; margin-right: auto;
+  .tag {
+    background: rgba(255,255,255,0.15); color: #fff; font-size: 12px; font-weight: 600; padding: 6px 12px;
+    border-radius: 8px; display: flex; align-items: center; gap: 6px;
   }
-  .settings-panel-head { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); justify-content: space-between; display: flex; margin-bottom: 14px; }
-  .settings-panel-head span:last-child { color: var(--accent-2); cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; }
+  .tag span { cursor: pointer; color: rgba(255,255,255,0.5); }
+  .tag span:hover { color: #ff453a; }
 
-  .cookie-group { margin-bottom: 12px; }
-  .cookie-group label { display: block; font-size: 10px; font-weight: 600; color: var(--ink-dim); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
-  .settings-panel textarea, .settings-panel select { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--glass-border-soft); color: var(--ink); font-family: inherit; font-size: 13px; padding: 12px 14px; outline: none; border-radius: var(--radius-sm); transition: border 0.2s; }
-  .settings-panel textarea { height: 50px; font-family: monospace; font-size: 11px; padding: 11px; resize: vertical; }
-  
-  .main-input {
-    width: 100%; max-width: 650px; display: block; margin: 0 auto 16px auto; background: rgba(0,0,0,0.28);
-    border: 1px solid var(--glass-border-soft); color: var(--ink); padding: 16px; font-family: inherit; font-size: 14px;
-    border-radius: var(--radius-md); outline: none; transition: all 0.2s; box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
-  }
-  .main-input:focus { border-color: rgba(255,255,255,0.24); background: rgba(0,0,0,0.42); box-shadow: 0 0 0 4px rgba(10,132,255,0.12); }
-
+  /* Split Buttons */
+  .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
   button.solid {
-    background: #fff; color: #000; padding: 15px 24px; font-size: 14px; font-weight: 600;
-    border-radius: 16px; width: 100%; max-width: 650px; display: block; margin: 0 auto; border: none; cursor: pointer; transition: all 0.15s;
+    padding: 16px; font-size: 14px; font-weight: 600; border-radius: 16px; border: none; cursor: pointer; transition: all 0.15s; font-family: inherit;
   }
-  button.solid:hover { opacity: 0.9; transform: scale(0.99); }
-  button.solid:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  button.solid:hover { transform: scale(0.98); opacity: 0.9; }
+  button.solid:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-discover { background: var(--accent-purple); color: #fff; }
+  .btn-analyze { background: var(--accent); color: #fff; }
 
-  .status { font-size: 13px; font-weight: 500; color: var(--ink-dim); min-height: 20px; margin-top: 16px; text-align: center; }
+  /* Channel Manager & Settings */
+  .settings-panel { display: none; background: rgba(0,0,0,0.4); border-radius: var(--radius-md); padding: 20px; margin-bottom: 24px; border: 1px solid var(--glass-border-soft); }
+  .channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; margin-top: 16px; padding-right: 8px; }
+  .channel-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; display: flex; align-items: center; gap: 12px; }
+  .channel-card img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+  .channel-card .c-info { flex: 1; overflow: hidden; }
+  .channel-card .c-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .channel-card .c-del { color: #ff453a; cursor: pointer; font-size: 16px; }
+
+  .status { font-size: 13px; font-weight: 500; color: var(--ink-dim); min-height: 20px; margin-top: 20px; text-align: center; }
   .status.active { color: var(--accent-2); }
-  .status.error { color: #ff453a; }
-  .status.success { color: #32d74b; }
-
-  .list-header { font-size: 11px; font-weight: 600; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 32px; margin-bottom: 12px; display: none; justify-content: space-between; }
   
-  .table-container { width: 100%; overflow-x: auto; max-height: 500px; overflow-y: auto; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border-soft); margin-top: 16px;}
+  /* Output Table */
+  .table-container { width: 100%; overflow-x: auto; max-height: 600px; overflow-y: auto; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border-soft); margin-top: 24px; display: none; }
   .glass-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; white-space: nowrap; }
-  .glass-table th { position: sticky; top: 0; background: rgba(30, 30, 35, 0.85); backdrop-filter: blur(12px); color: var(--ink-dim); font-weight: 600; padding: 12px 16px; z-index: 2; }
-  .glass-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); color: var(--ink); }
+  .glass-table th { position: sticky; top: 0; background: rgba(30, 30, 35, 0.9); backdrop-filter: blur(12px); color: var(--ink-dim); font-weight: 600; padding: 12px 16px; z-index: 2; }
+  .glass-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
   .glass-table tr:hover td { background: rgba(255,255,255,0.05); }
   
-  .sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
-  .sortable:hover { background: rgba(255,255,255,0.08); color: #fff; }
-  .trunc { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+  .thumb-img { width: 64px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
+  .logo-img { width: 24px; height: 24px; border-radius: 50%; vertical-align: middle; margin-right: 8px; }
   
-  .table-btn { font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; text-decoration: none; transition: background 0.2s; margin-right:4px;}
-  .table-btn:hover { background: rgba(255,255,255,0.2); }
   .badge { padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 11px; background: rgba(191, 90, 242, 0.2); color: #bf5af2;}
+  .table-btn { font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; text-decoration: none; transition: 0.2s; margin-right: 4px; }
+  .table-btn:hover { background: rgba(255,255,255,0.2); }
+  .trunc { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
   
-  .progress-bar-bg { width: 60px; height: 6px; background: rgba(255,255,255,0.15); border-radius: 4px; display: inline-block; vertical-align: middle; margin-right: 8px; overflow: hidden; }
-  .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; }
-  .progress-val { font-size: 11px; color: var(--ink-dim); }
-
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 </style>
 </head>
 <body>
 
-<div class="brand">
-  <span class="brand-mark">Research Tool Pro</span>
-  <span class="brand-sub">YouTube Intelligence Engine</span>
-</div>
-
-<div class="quick-row">
-  <div class="pill-glass glass mode-active" id="modeKeywordBtn" onclick="setMode('keyword')">🔍 Legacy Search</div>
-  <div class="pill-glass glass" id="modeTrendingBtn" onclick="setMode('trending')">⚡ Trending</div>
-  <div class="pill-glass glass" id="modeAutoBtn" onclick="setMode('auto')">🤖 Auto Pipeline</div>
-  
-  <div class="icon-glass glass" id="settingsBtn" onclick="toggleSettings()" title="Settings">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+<!-- Authentication Overlay -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <h2 id="loginTitle">System Locked</h2>
+    <p id="loginSub">Enter your Profile PIN to access the base.</p>
+    <input type="password" id="pinInput" class="login-input" placeholder="••••" onkeypress="if(event.key === 'Enter') checkLogin()">
+    <button class="solid btn-analyze" style="width:100%;" onclick="checkLogin()">Unlock</button>
   </div>
 </div>
 
+<div class="brand">
+  <span class="brand-mark">Base Command</span>
+  <span class="brand-sub">Permanent Channel Pipeline</span>
+</div>
+
 <div class="box">
-  <div class="glass-panel glass">
+  <div class="glass-panel">
     
+    <div class="header-row">
+      <h3>Pipeline Configuration</h3>
+      <button class="btn-icon" onclick="toggleSettings()">⚙️ Base Manager & API</button>
+    </div>
+
+    <!-- Settings & Base Manager Panel -->
     <div class="settings-panel" id="settingsPanel">
-      <div class="settings-panel-head">
-        <span>API &amp; Search Settings</span>
-        <span onclick="saveSettings()">Save Settings</span>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:600;">YouTube API Key</label>
+        <input type="text" id="ytApiKey" class="tag-container" style="width:100%; margin-top:6px;" placeholder="AIzaSy..." onchange="saveConfig()">
       </div>
-      <div class="cookie-group">
-        <label>YouTube API v3 Key</label>
-        <textarea id="ytApiKey" placeholder="AIzaSy..."></textarea>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <label style="font-size:10px; text-transform:uppercase; color:var(--ink-dim); font-weight:600;">Verified Base Channels</label>
+        <span style="font-size:12px; color:var(--accent);" id="baseCount">0 Saved</span>
       </div>
-      <div class="cookie-group">
-        <label>Time Period (Legacy)</label>
-        <select id="periodSelect">
-          <option value="1">Last 24 Hours</option>
-          <option value="7" selected>Last 7 Days</option>
-          <option value="30">Last 30 Days</option>
-        </select>
-      </div>
-      <div class="cookie-group">
-        <label>Number of Results (Legacy)</label>
-        <select id="maxResultsSelect">
-          <option value="10">10</option><option value="20" selected>20</option><option value="50">50</option>
-        </select>
+      <div class="channel-grid" id="channelGrid">
+        <!-- Channel Cards Load Here -->
       </div>
     </div>
 
-    <!-- Legacy Inputs -->
-    <div id="legacyInputs">
-      <input type="text" id="keywordInput" class="main-input" placeholder="e.g. minecraft speedrun, true crime">
+    <!-- Tag Inputs -->
+    <div style="font-size:11px; margin-bottom:6px; color:var(--ink-dim); font-weight:600;">1. DISCOVERY SEEDS (Type & Press Enter)</div>
+    <div class="tag-container" id="seedContainer">
+      <input type="text" id="seedInput" placeholder="e.g. street food, funny animals...">
     </div>
 
-    <!-- Auto Pipeline Inputs -->
-    <div id="autoInputs" style="display:none;">
-      <input type="text" id="seedInput" class="main-input" style="margin-bottom: 12px;" placeholder="1. Seed Keyword (e.g. funny animals)">
-      <input type="text" id="nicheInput" class="main-input" style="margin-bottom: 12px;" placeholder="2. Niche Qualifications (comma separated, e.g. cat, dog)">
-      <input type="number" id="thresholdInput" class="main-input" placeholder="3. Min matches in last 30 videos (e.g. 5)" value="5">
+    <div style="font-size:11px; margin-bottom:6px; color:var(--ink-dim); font-weight:600;">2. NICHE VERIFICATION KEYWORDS (Type & Press Enter)</div>
+    <div class="tag-container" id="nicheContainer">
+      <input type="text" id="nicheInput" placeholder="e.g. spicy, vendor, burger...">
     </div>
 
-    <button class="solid" id="actionBtn" onclick="runSearch()">Execute Search</button>
-    <div class="status" id="mainStatus">Ready.</div>
+    <div style="font-size:11px; margin-bottom:6px; color:var(--ink-dim); font-weight:600;">3. QUALIFICATION THRESHOLD</div>
+    <input type="number" id="thresholdInput" class="tag-container" style="width:100%; color:#fff; font-size:14px;" value="5" onchange="saveConfig()">
 
-    <div class="list-header" id="listHeader">
-      <span id="listCount">0 Videos Found</span>
+    <!-- Action Buttons -->
+    <div class="action-grid">
+      <button class="solid btn-discover" id="btnDiscover" onclick="runPipeline('discover')">
+        🔍 Discover & Add to Base
+      </button>
+      <button class="solid btn-analyze" id="btnAnalyze" onclick="runPipeline('analyze')">
+        ⚡ Analyze Saved Base List
+      </button>
     </div>
-    
-    <!-- Render Container for Tables -->
-    <div id="resultsTableContainer"></div>
+
+    <div class="status" id="mainStatus">System Ready.</div>
+
+    <div class="table-container" id="tableContainer">
+      <table class="glass-table">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
   </div>
 </div>
 
 <script>
-  const API_BASE = 'https://www.googleapis.com/youtube/v3';
-  let mode = 'keyword'; 
-  window.lastFetchedResults = [];
-  window.sortState = { col: null, dir: 0 };
+  let config = { seeds: [], niches: [], threshold: 5, apiKey: '' };
+  let baseChannels = {}; // Master permanent storage
 
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("ytApiKey").value = localStorage.getItem("yt_api_key") || "";
-    document.getElementById("periodSelect").value = localStorage.getItem("yt_period") || "7";
-    document.getElementById("maxResultsSelect").value = localStorage.getItem("yt_max_results") || "20";
-    setMode('keyword');
-  });
+  // --- 1. LOGIN SYSTEM ---
+  window.onload = () => {
+    const savedPin = localStorage.getItem('profile_pin');
+    if (!savedPin) {
+      document.getElementById('loginTitle').innerText = 'Welcome Setup';
+      document.getElementById('loginSub').innerText = 'Create a PIN to permanently lock your profile and data.';
+    }
+  };
 
+  function checkLogin() {
+    const input = document.getElementById('pinInput').value;
+    const savedPin = localStorage.getItem('profile_pin');
+    
+    if (!input) return;
+
+    if (!savedPin) {
+      localStorage.setItem('profile_pin', input);
+      unlockSystem();
+    } else if (input === savedPin) {
+      unlockSystem();
+    } else {
+      document.getElementById('loginSub').innerText = '❌ Incorrect PIN';
+      document.getElementById('loginSub').style.color = '#ff453a';
+    }
+  }
+
+  function unlockSystem() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    loadPermanentData();
+    setupTagListeners();
+  }
+
+  // --- 2. PERMANENT DATA MANAGEMENT ---
+  function loadPermanentData() {
+    const savedConfig = localStorage.getItem('app_config');
+    if (savedConfig) {
+      config = JSON.parse(savedConfig);
+      document.getElementById('ytApiKey').value = config.apiKey || '';
+      document.getElementById('thresholdInput').value = config.threshold || 5;
+      renderTags('seedContainer', config.seeds);
+      renderTags('nicheContainer', config.niches);
+    }
+
+    const savedChannels = localStorage.getItem('base_channels');
+    if (savedChannels) {
+      baseChannels = JSON.parse(savedChannels);
+      syncBackend(); // Push local master list to backend memory instantly
+    }
+    renderChannelGrid();
+  }
+
+  function saveConfig() {
+    config.apiKey = document.getElementById('ytApiKey').value.trim();
+    config.threshold = parseInt(document.getElementById('thresholdInput').value) || 5;
+    localStorage.setItem('app_config', JSON.stringify(config));
+  }
+
+  async function syncBackend() {
+    // Keeps backend JSON in sync with browser master list
+    await fetch('/api/sync-channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(baseChannels)
+    });
+  }
+
+  // --- 3. TAG SYSTEM ---
+  function setupTagListeners() {
+    const handleEnter = (e, arrKey, containerId, inputId) => {
+      if (e.key === 'Enter' && e.target.value.trim()) {
+        const val = e.target.value.trim();
+        if (!config[arrKey].includes(val)) {
+          config[arrKey].push(val);
+          saveConfig();
+          renderTags(containerId, config[arrKey]);
+        }
+        e.target.value = '';
+      }
+    };
+    document.getElementById('seedInput').addEventListener('keypress', (e) => handleEnter(e, 'seeds', 'seedContainer', 'seedInput'));
+    document.getElementById('nicheInput').addEventListener('keypress', (e) => handleEnter(e, 'niches', 'nicheContainer', 'nicheInput'));
+  }
+
+  function renderTags(containerId, arr) {
+    const container = document.getElementById(containerId);
+    const input = container.querySelector('input');
+    container.innerHTML = '';
+    
+    arr.forEach((tag, idx) => {
+      const span = document.createElement('div');
+      span.className = 'tag';
+      span.innerHTML = `${tag} <span onclick="removeTag('${containerId}', ${idx})">&times;</span>`;
+      container.appendChild(span);
+    });
+    container.appendChild(input);
+  }
+
+  window.removeTag = function(containerId, idx) {
+    const arrKey = containerId === 'seedContainer' ? 'seeds' : 'niches';
+    config[arrKey].splice(idx, 1);
+    saveConfig();
+    renderTags(containerId, config[arrKey]);
+  }
+
+  // --- 4. BASE MANAGER (UI) ---
   function toggleSettings() {
     const panel = document.getElementById("settingsPanel");
     panel.style.display = panel.style.display === "block" ? "none" : "block";
   }
 
-  function saveSettings() {
-    localStorage.setItem("yt_api_key", document.getElementById("ytApiKey").value.trim());
-    localStorage.setItem("yt_period", document.getElementById("periodSelect").value);
-    localStorage.setItem("yt_max_results", document.getElementById("maxResultsSelect").value);
-    setStatus("Settings saved.", "success");
-    toggleSettings();
+  function renderChannelGrid() {
+    const grid = document.getElementById('channelGrid');
+    grid.innerHTML = '';
+    const keys = Object.keys(baseChannels);
+    document.getElementById('baseCount').innerText = `${keys.length} Saved`;
+
+    keys.forEach(cId => {
+      const c = baseChannels[cId];
+      const div = document.createElement('div');
+      div.className = 'channel-card';
+      div.innerHTML = `
+        <img src="${c.logo || 'https://via.placeholder.com/36'}" alt="logo">
+        <div class="c-info">
+          <div class="c-name">${c.title}</div>
+        </div>
+        <div class="c-del" onclick="deleteChannel('${cId}')">&times;</div>
+      `;
+      grid.appendChild(div);
+    });
   }
 
-  function getApiKey() { return localStorage.getItem("yt_api_key") || document.getElementById("ytApiKey").value.trim(); }
-
-  function setMode(newMode) {
-    mode = newMode;
-    document.getElementById("modeKeywordBtn").classList.toggle("mode-active", mode === "keyword");
-    document.getElementById("modeTrendingBtn").classList.toggle("mode-active", mode === "trending");
-    
-    const autoBtn = document.getElementById("modeAutoBtn");
-    autoBtn.classList.toggle("mode-active", mode === "auto");
-    autoBtn.classList.toggle("auto", mode === "auto");
-
-    const legInput = document.getElementById("legacyInputs");
-    const autoInput = document.getElementById("autoInputs");
-    const btn = document.getElementById("actionBtn");
-
-    if (mode === "keyword") {
-      legInput.style.display = "block"; autoInput.style.display = "none"; btn.textContent = "Find Exploding Content";
-    } else if (mode === "trending") {
-      legInput.style.display = "none"; autoInput.style.display = "none"; btn.textContent = "Refresh Trending";
-    } else {
-      legInput.style.display = "none"; autoInput.style.display = "block"; btn.textContent = "Initialize Auto Pipeline";
-    }
-    
-    document.getElementById('resultsTableContainer').innerHTML = '';
-    document.getElementById('listHeader').style.display = 'none';
+  window.deleteChannel = function(cId) {
+    delete baseChannels[cId];
+    localStorage.setItem('base_channels', JSON.stringify(baseChannels));
+    syncBackend();
+    renderChannelGrid();
   }
 
+  // --- 5. PIPELINE EXECUTION ---
   function setStatus(msg, type = '') {
-    const el = document.getElementById('mainStatus'); el.textContent = msg; el.className = 'status ' + type;
+    const el = document.getElementById('mainStatus');
+    el.textContent = msg; el.className = 'status ' + type;
   }
 
-  async function runSearch() {
-    const apiKey = getApiKey();
-    if (!apiKey) { setStatus("Add your YouTube API key in Settings first.", "error"); return; }
+  function runPipeline(actionType) {
+    if (!config.apiKey) return setStatus("API Key required in Settings.", "error");
     
-    const btn = document.getElementById('actionBtn');
-    btn.disabled = true;
+    document.getElementById('btnDiscover').disabled = true;
+    document.getElementById('btnAnalyze').disabled = true;
+    document.getElementById('tableContainer').style.display = 'none';
 
-    try {
-      if (mode === 'trending') {
-        await fetchTrending(apiKey);
-      } else if (mode === 'keyword') {
-        const keyword = document.getElementById('keywordInput').value.trim();
-        if (!keyword) { setStatus("Enter a keyword first.", "error"); btn.disabled = false; return; }
-        await fetchKeywordSearch(apiKey, keyword);
-      } else if (mode === 'auto') {
-        runAutoResearch(apiKey);
+    let url = '';
+    if (actionType === 'discover') {
+      if (config.seeds.length === 0 || config.niches.length === 0) {
+        setStatus("Seeds and Niche tags are required for Discovery.", "error");
+        enableBtns(); return;
       }
-    } catch (err) {
-      setStatus(`Error: ${err.message}`, "error");
+      const sParams = encodeURIComponent(config.seeds.join(','));
+      const nParams = encodeURIComponent(config.niches.join(','));
+      url = `/api/discover?api_key=${config.apiKey}&seeds=${sParams}&niches=${nParams}&threshold=${config.threshold}`;
+    } else {
+      if (Object.keys(baseChannels).length === 0) {
+        setStatus("Your Base List is empty. Run Discovery first.", "error");
+        enableBtns(); return;
+      }
+      url = `/api/analyze?api_key=${config.apiKey}`;
     }
-    
-    if (mode !== 'auto') btn.disabled = false;
-  }
 
-  /* --- LEGACY LOGIC --- */
-  async function fetchTrending(apiKey) {
-    setStatus("Fetching trending videos...", "active");
-    const res = await fetch(`${API_BASE}/videos?part=snippet,statistics&chart=mostPopular&maxResults=25&key=${apiKey}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    await renderLegacyResults(apiKey, data.items || []);
-  }
-
-  async function fetchKeywordSearch(apiKey, keyword) {
-    setStatus("Searching for exploding content...", "active");
-    const days = parseInt(localStorage.getItem("yt_period") || "7", 10);
-    const maxRes = parseInt(localStorage.getItem("yt_max_results") || "20", 10);
-    const afterDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    
-    const searchRes = await fetch(`${API_BASE}/search?part=snippet&q=${encodeURIComponent(keyword)}&type=video&order=viewCount&publishedAfter=${afterDate}&maxResults=${maxRes}&key=${apiKey}`);
-    const searchData = await searchRes.json();
-    if (searchData.error) throw new Error(searchData.error.message);
-
-    const videoIds = (searchData.items || []).map(i => i.id.videoId).filter(Boolean);
-    if (videoIds.length === 0) { setStatus("No results.", "error"); return; }
-
-    const videosRes = await fetch(`${API_BASE}/videos?part=snippet,statistics&id=${videoIds.join(',')}&key=${apiKey}`);
-    const videosData = await videosRes.json();
-    if (videosData.error) throw new Error(videosData.error.message);
-    await renderLegacyResults(apiKey, videosData.items || []);
-  }
-
-  async function renderLegacyResults(apiKey, videoItems) {
-    const channelIds = [...new Set(videoItems.map(v => v.snippet.channelId))];
-    const channelsRes = await fetch(`${API_BASE}/channels?part=snippet,statistics&id=${channelIds.join(',')}&key=${apiKey}`);
-    const channelsData = await channelsRes.json();
-    const channelsById = {};
-    (channelsData.items || []).forEach(c => { channelsById[c.id] = c; });
-
-    const results = videoItems.map(item => {
-      const cId = item.snippet.channelId;
-      const cInfo = channelsById[cId];
-      const ageDays = Math.floor((Date.now() - (cInfo ? new Date(cInfo.snippet.publishedAt) : new Date()).getTime()) / 86400000);
-      return {
-        title: item.snippet.title, channel: item.snippet.channelTitle,
-        views: item.statistics ? parseInt(item.statistics.viewCount || 0, 10) : 0,
-        subs: cInfo && cInfo.statistics ? parseInt(cInfo.statistics.subscriberCount || 0, 10) : 0,
-        videos: cInfo && cInfo.statistics ? parseInt(cInfo.statistics.videoCount || 0, 10) : 0,
-        ageDays: ageDays, videoLink: `https://www.youtube.com/watch?v=${item.id.videoId || item.id}`, channelLink: `https://www.youtube.com/channel/${cId}`
-      };
-    });
-
-    window.lastFetchedResults = results; window.sortState = { col: null, dir: 0 };
-    renderLegacyTable(results);
-    setStatus(`${results.length} videos found.`, "success");
-  }
-
-  function handleSort(col) {
-    if (window.sortState.col === col) window.sortState.dir = (window.sortState.dir + 1) % 3;
-    else { window.sortState.col = col; window.sortState.dir = 1; }
-
-    let toRender = [...window.lastFetchedResults];
-    if (window.sortState.dir !== 0) toRender.sort((a, b) => window.sortState.dir === 1 ? b[col] - a[col] : a[col] - b[col]);
-    
-    mode === 'auto' ? renderAutoTable(toRender) : renderLegacyTable(toRender);
-  }
-
-  function getSortIndicator(col) {
-    if (window.sortState && window.sortState.col === col) return window.sortState.dir === 1 ? ' ↓' : (window.sortState.dir === 2 ? ' ↑' : '');
-    return '';
-  }
-  function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
-
-  function renderLegacyTable(results) {
-    const container = document.getElementById('resultsTableContainer');
-    document.getElementById('listHeader').style.display = 'flex';
-    document.getElementById('listCount').textContent = `${results.length} Legacy Videos Found`;
-
-    let html = `<div class="table-container"><table class="glass-table"><thead><tr>
-      <th>Title</th><th>Channel</th>
-      <th class="sortable" onclick="handleSort('views')">Views${getSortIndicator('views')}</th>
-      <th class="sortable" onclick="handleSort('subs')">Subs${getSortIndicator('subs')}</th>
-      <th class="sortable" onclick="handleSort('videos')">Videos${getSortIndicator('videos')}</th>
-      <th class="sortable" onclick="handleSort('ageDays')">Channel Age${getSortIndicator('ageDays')}</th>
-      <th>Links</th></tr></thead><tbody>`;
-
-    results.forEach(r => {
-      let ageP = Math.min((r.ageDays / 730) * 100, 100);
-      html += `<tr><td class="trunc" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</td><td class="trunc">${escapeHtml(r.channel)}</td>
-      <td>${r.views.toLocaleString()} 👁️</td><td>${r.subs.toLocaleString()} 👥</td><td>${r.videos.toLocaleString()}</td>
-      <td><div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${ageP}%"></div></div><span class="progress-val">${r.ageDays}d</span></td>
-      <td><a class="table-btn" href="${r.videoLink}" target="_blank">▶️</a><a class="table-btn" href="${r.channelLink}" target="_blank">👤</a></td></tr>`;
-    });
-    container.innerHTML = html + `</tbody></table></div>`;
-  }
-
-  /* --- NEW AUTO PIPELINE LOGIC --- */
-  function runAutoResearch(apiKey) {
-    const seed = document.getElementById('seedInput').value.trim();
-    const niche = document.getElementById('nicheInput').value.trim();
-    const threshold = document.getElementById('thresholdInput').value;
-    if (!seed || !niche) { setStatus("Seed and Niche keywords required.", "error"); document.getElementById('actionBtn').disabled = false; return; }
-
-    const url = `/api/auto-research?api_key=${apiKey}&seed=${encodeURIComponent(seed)}&niche=${encodeURIComponent(niche)}&threshold=${threshold}`;
     const eventSource = new EventSource(url);
 
     eventSource.onmessage = function(event) {
       const data = JSON.parse(event.data);
-      if (data.status === 'progress') setStatus(data.msg, "active");
+      
+      if (data.status === 'progress') {
+        setStatus(data.msg, "active");
+      } 
+      else if (data.status === 'channel_found') {
+        // Permanently add new channel to browser master list
+        baseChannels[data.channel.id] = data.channel.data;
+        localStorage.setItem('base_channels', JSON.stringify(baseChannels));
+        syncBackend();
+        renderChannelGrid();
+      }
       else if (data.status === 'done') {
         setStatus(data.msg, "success");
-        window.lastFetchedResults = data.results; window.sortState = { col: null, dir: 0 };
-        renderAutoTable(data.results);
-        eventSource.close(); document.getElementById('actionBtn').disabled = false;
+        if (data.results) renderTable(data.results);
+        eventSource.close(); enableBtns();
       } 
       else if (data.status === 'error') {
-        setStatus("Error: " + data.msg, "error"); eventSource.close(); document.getElementById('actionBtn').disabled = false;
+        setStatus("Error: " + data.msg, "error");
+        eventSource.close(); enableBtns();
       }
     };
-    eventSource.onerror = function(err) {
-      setStatus("Connection stream lost.", "error"); eventSource.close(); document.getElementById('actionBtn').disabled = false;
+    eventSource.onerror = function() {
+      setStatus("Stream finished or disconnected.", "success");
+      eventSource.close(); enableBtns();
     };
   }
 
-  function renderAutoTable(results) {
-    const container = document.getElementById('resultsTableContainer');
-    document.getElementById('listHeader').style.display = 'flex';
-    document.getElementById('listCount').textContent = `${results.length} Target Shorts Generated`;
+  function enableBtns() {
+    document.getElementById('btnDiscover').disabled = false;
+    document.getElementById('btnAnalyze').disabled = false;
+  }
 
-    let html = `<div class="table-container"><table class="glass-table"><thead><tr>
-      <th>Short Title</th><th>Verified Channel</th>
-      <th class="sortable" onclick="handleSort('views')">Total Views${getSortIndicator('views')}</th>
-      <th class="sortable" onclick="handleSort('vph')">Velocity (VPH)${getSortIndicator('vph')}</th>
-      <th class="sortable" onclick="handleSort('age_hours')">Age (Hours)${getSortIndicator('age_hours')}</th>
-      <th>Links</th></tr></thead><tbody>`;
+  function renderTable(results) {
+    if (results.length === 0) return setStatus("No results matched criteria.", "error");
+    document.getElementById('tableContainer').style.display = 'block';
+    
+    const thead = document.getElementById('tableHead');
+    const tbody = document.getElementById('tableBody');
 
+    thead.innerHTML = `<tr><th>Video</th><th>Title</th><th>Base Channel</th><th>Views</th><th>Velocity (VPH)</th><th>Links</th></tr>`;
+    
+    let html = '';
     results.forEach(r => {
-      html += `<tr><td class="trunc" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</td><td class="trunc">${escapeHtml(r.channel)}</td>
-      <td>${r.views.toLocaleString()} 👁️</td><td><span class="badge">🔥 ${r.vph.toLocaleString()}/hr</span></td><td>${r.age_hours} hrs</td>
-      <td><a class="table-btn" href="${r.videoLink}" target="_blank">▶️ Watch</a><a class="table-btn" href="${r.channelLink}" target="_blank">👤 Ch</a></td></tr>`;
+      html += `<tr>
+        <td><img class="thumb-img" src="${r.thumbnail}" alt="thumb"></td>
+        <td class="trunc" title="${r.title}">${r.title}</td>
+        <td><img class="logo-img" src="${r.logo}">${r.channel}</td>
+        <td>${r.views.toLocaleString()} 👁️</td>
+        <td><span class="badge">🔥 ${r.vph.toLocaleString()}/hr</span></td>
+        <td>
+          <a class="table-btn" href="${r.videoLink}" target="_blank">▶️</a>
+          <a class="table-btn" href="${r.channelLink}" target="_blank">👤</a>
+        </td>
+      </tr>`;
     });
-    container.innerHTML = html + `</tbody></table></div>`;
+    tbody.innerHTML = html;
   }
 </script>
 </body>
@@ -435,16 +453,87 @@ HTML_UI = """<!DOCTYPE html>
 def index():
     return HTML_UI
 
-@app.route("/health")
-def health():
-    return {"status": "ok"}, 200
+@app.route("/api/sync-channels", methods=["POST"])
+def sync_channels():
+    # Frontend master list pushes here so the backend can use it for Analysis
+    global BASE_CHANNELS
+    BASE_CHANNELS = request.json or {}
+    return jsonify({"success": True})
 
-@app.route('/api/auto-research', methods=['GET'])
-def auto_research_stream():
+@app.route('/api/discover', methods=['GET'])
+def auto_discover():
     api_key = request.args.get('api_key')
-    seed = request.args.get('seed')
-    niche_str = request.args.get('niche')
+    seeds = request.args.get('seeds', '').split(',')
+    niche_keywords = [k.strip().lower() for k in request.args.get('niches', '').split(',') if k.strip()]
     threshold = int(request.args.get('threshold', 5))
+
+    def generate():
+        def emit(status, msg="", data=None, channel_info=None):
+            payload = {"status": status, "msg": msg}
+            if data is not None: payload["results"] = data
+            if channel_info is not None: payload["channel"] = channel_info
+            return f"data: {json.dumps(payload)}\n\n"
+
+        try:
+            youtube = build('youtube', 'v3', developerKey=api_key)
+            new_channels = set()
+
+            # 1. Search across all seed tags
+            for seed in seeds:
+                if not seed.strip(): continue
+                yield emit('progress', f'Searching seed tag: "{seed}"...')
+                search_res = youtube.search().list(q=seed.strip(), part="snippet", type="video", order="date", maxResults=15).execute()
+                for item in search_res.get('items', []):
+                    c_id = item['snippet']['channelId']
+                    if c_id not in BASE_CHANNELS:
+                        new_channels.add(c_id)
+
+            yield emit('progress', f'Extracted {len(new_channels)} undocumented channels. Running Niche Verification...')
+
+            # 2. Qualify Channels
+            new_channels = list(new_channels)
+            if new_channels:
+                for i in range(0, len(new_channels), 50):
+                    batch = new_channels[i:i+50]
+                    c_res = youtube.channels().list(part="contentDetails,snippet", id=",".join(batch)).execute()
+                    
+                    for c_item in c_res.get('items', []):
+                        c_id = c_item['id']
+                        c_title = c_item['snippet']['title']
+                        logo = c_item['snippet']['thumbnails']['default']['url']
+                        
+                        try:
+                            uploads_id = c_item['contentDetails']['relatedPlaylists']['uploads']
+                        except KeyError:
+                            continue 
+
+                        # Check last 30 videos
+                        pl_res = youtube.playlistItems().list(part="snippet", playlistId=uploads_id, maxResults=30).execute()
+                        
+                        match_count = 0
+                        for pl_item in pl_res.get('items', []):
+                            title = pl_item['snippet']['title'].lower()
+                            if any(k in title for k in niche_keywords): match_count += 1
+
+                        if match_count >= threshold:
+                            channel_data = {"title": c_title, "uploads_id": uploads_id, "logo": logo}
+                            BASE_CHANNELS[c_id] = channel_data
+                            # Stream directly to browser storage
+                            yield emit('channel_found', f'✅ Added to Base: {c_title} ({match_count} matches)', channel_info={"id": c_id, "data": channel_data})
+                        else:
+                            yield emit('progress', f'❌ Discarded: {c_title} ({match_count} matches)')
+
+            yield emit('done', f'Discovery Sequence Complete. Saved {len(BASE_CHANNELS)} total channels to Base.')
+
+        except Exception as e:
+            yield emit('error', str(e))
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
+@app.route('/api/analyze', methods=['GET'])
+def auto_analyze():
+    api_key = request.args.get('api_key')
 
     def generate():
         def emit(status, msg="", data=None):
@@ -454,56 +543,17 @@ def auto_research_stream():
 
         try:
             youtube = build('youtube', 'v3', developerKey=api_key)
-            niche_keywords = [k.strip().lower() for k in niche_str.split(',') if k.strip()]
-
-            db_path = 'verified_channels.json'
-            verified = {}
-            if os.path.exists(db_path):
-                with open(db_path, 'r') as f:
-                    verified = json.load(f)
-
-            yield emit('progress', f'Searching seed keyword: "{seed}" to find active channels...')
-            
-            search_res = youtube.search().list(q=seed, part="snippet", type="video", order="date", maxResults=20).execute()
-            found_channels = list(set([item['snippet']['channelId'] for item in search_res.get('items', [])]))
-            new_channels = [cid for cid in found_channels if cid not in verified]
-            
-            yield emit('progress', f'Found {len(found_channels)} channels. {len(new_channels)} are new. Qualifying them...')
-
-            if new_channels:
-                c_res = youtube.channels().list(part="contentDetails,snippet", id=",".join(new_channels)).execute()
-                for c_item in c_res.get('items', []):
-                    c_id = c_item['id']
-                    c_title = c_item['snippet']['title']
-                    try:
-                        uploads_id = c_item['contentDetails']['relatedPlaylists']['uploads']
-                    except KeyError:
-                        continue 
-
-                    pl_res = youtube.playlistItems().list(part="snippet", playlistId=uploads_id, maxResults=30).execute()
-                    
-                    match_count = 0
-                    for pl_item in pl_res.get('items', []):
-                        title = pl_item['snippet']['title'].lower()
-                        if any(k in title for k in niche_keywords): match_count += 1
-
-                    if match_count >= threshold:
-                        verified[c_id] = {"title": c_title, "uploads_id": uploads_id}
-                        yield emit('progress', f'✅ Qualified: {c_title} ({match_count} matches)')
-                    else:
-                        yield emit('progress', f'❌ Discarded: {c_title} ({match_count} matches)')
-
-                with open(db_path, 'w') as f:
-                    json.dump(verified, f, indent=4)
-
-            yield emit('progress', f'Scraping latest Shorts from all {len(verified)} verified channels in database...')
             all_shorts = []
+            
+            total_base = len(BASE_CHANNELS)
+            yield emit('progress', f'Initializing scrape sequence for {total_base} Base Channels...')
 
-            for c_id, c_data in verified.items():
+            for idx, (c_id, c_data) in enumerate(BASE_CHANNELS.items()):
+                yield emit('progress', f'[{idx+1}/{total_base}] Analyzing {c_data["title"]}...')
                 uploads_id = c_data.get('uploads_id')
                 if not uploads_id: continue
 
-                pl_res = youtube.playlistItems().list(part="contentDetails", playlistId=uploads_id, maxResults=20).execute()
+                pl_res = youtube.playlistItems().list(part="contentDetails", playlistId=uploads_id, maxResults=15).execute()
                 v_ids = [item['contentDetails']['videoId'] for item in pl_res.get('items', [])]
 
                 if not v_ids: continue
@@ -521,12 +571,19 @@ def auto_research_stream():
                         pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
                         age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
                         views = int(v_item['statistics'].get('viewCount', 0))
-                        
                         vph = views / max(age_hours, 1)
+                        
+                        # Extract Video Thumbnail
+                        try:
+                            thumb = v_item['snippet']['thumbnails']['medium']['url']
+                        except KeyError:
+                            thumb = v_item['snippet']['thumbnails']['default']['url']
 
                         all_shorts.append({
                             "title": v_item['snippet']['title'],
                             "channel": c_data['title'],
+                            "logo": c_data.get('logo', ''),
+                            "thumbnail": thumb,
                             "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
                             "videoLink": f"https://www.youtube.com/watch?v={v_item['id']}",
                             "channelLink": f"https://www.youtube.com/channel/{c_id}"
@@ -534,7 +591,7 @@ def auto_research_stream():
 
             yield emit('progress', 'Sorting matrix by View Velocity...')
             all_shorts.sort(key=lambda x: x['vph'], reverse=True)
-            yield emit('done', 'Research Complete!', all_shorts[:100])
+            yield emit('done', 'Base Analysis Complete!', all_shorts[:100])
 
         except Exception as e:
             yield emit('error', str(e))
