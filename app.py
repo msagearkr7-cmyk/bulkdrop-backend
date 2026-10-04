@@ -2,8 +2,6 @@ from flask import Flask, request, Response, jsonify
 from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import datetime, timezone, timedelta
-import concurrent.futures
-import requests
 import json
 import os
 
@@ -222,7 +220,7 @@ HTML_UI = """<!DOCTYPE html>
         </select></div>
       </div>
       <div class="filter-col">
-        <label>Video Format (Strict)</label>
+        <label>Video Format (Discovery)</label>
         <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
           <option value="any">Any Format</option>
           <option value="short">Shorts Only (Vertical)</option>
@@ -313,7 +311,7 @@ HTML_UI = """<!DOCTYPE html>
 
   // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function loadPermanentData() {
-    const savedMaster = localStorage.getItem('app_master_v3_1');
+    const savedMaster = localStorage.getItem('app_master_v3_2');
     if (savedMaster) {
       masterData = JSON.parse(savedMaster);
     } 
@@ -328,7 +326,7 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function saveMaster() {
-    localStorage.setItem('app_master_v3_1', JSON.stringify(masterData));
+    localStorage.setItem('app_master_v3_2', JSON.stringify(masterData));
   }
 
   function renderProfileDropdown() {
@@ -494,7 +492,7 @@ HTML_UI = """<!DOCTYPE html>
       if (Object.keys(pData.channels).length === 0) {
         setStatus("Your Base List for this profile is empty. Run Discovery first.", "error"); enableBtns(); return;
       }
-      url = `/api/analyze?api_key=${masterData.apiKey}&vtype=${pData.typeFilter}&depth=${pData.analyzeDepth}`;
+      url = `/api/analyze?api_key=${masterData.apiKey}&depth=${pData.analyzeDepth}`;
     }
 
     const eventSource = new EventSource(url);
@@ -657,8 +655,6 @@ def auto_discover():
 @app.route('/api/analyze', methods=['GET'])
 def auto_analyze():
     api_key = request.args.get('api_key')
-    vid_type = request.args.get('vtype', 'any')
-    # Using the new depth parameter
     analyze_depth = int(request.args.get('depth', 15))
 
     def generate():
@@ -669,70 +665,49 @@ def auto_analyze():
 
         try:
             youtube = build('youtube', 'v3', developerKey=api_key)
-            req_session = requests.Session() 
             all_videos = []
             total_base = len(BASE_CHANNELS)
             
             yield emit('progress', f'Initializing scrape sequence for {total_base} Base Channels (Depth: {analyze_depth})...')
-
-            # Helper function for threading the strict HTTP ping checking
-            def check_video_format(v_item, c_data, c_id):
-                v_id = v_item['id']
-                
-                # STRICT TRUE-VERTICAL SHORTS VERIFICATION
-                if vid_type != 'any':
-                    is_short = False
-                    try:
-                        r = req_session.head(f"https://www.youtube.com/shorts/{v_id}", allow_redirects=False, timeout=3)
-                        is_short = (r.status_code == 200)
-                    except:
-                        pass
-
-                    if vid_type == 'short' and not is_short: return None
-                    if vid_type == 'long' and is_short: return None
-
-                pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
-                date_str = pub_date.strftime("%b %d, %Y") # Format the date to e.g., Oct 04, 2026
-                age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
-                views = int(v_item['statistics'].get('viewCount', 0))
-                vph = views / max(age_hours, 1)
-                
-                try:
-                    thumb = v_item['snippet']['thumbnails']['medium']['url']
-                except KeyError:
-                    thumb = v_item['snippet']['thumbnails']['default']['url']
-
-                return {
-                    "title": v_item['snippet']['title'],
-                    "channel": c_data['title'],
-                    "logo": c_data.get('logo', ''),
-                    "thumbnail": thumb,
-                    "published": date_str,
-                    "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
-                    "videoLink": f"https://www.youtube.com/watch?v={v_id}",
-                    "channelLink": f"https://www.youtube.com/channel/{c_id}"
-                }
 
             for idx, (c_id, c_data) in enumerate(BASE_CHANNELS.items()):
                 yield emit('progress', f'[{idx+1}/{total_base}] Analyzing {c_data["title"]}...')
                 uploads_id = c_data.get('uploads_id')
                 if not uploads_id: continue
 
-                # Pull the exact number of videos the user requested from the UI dropdown
+                # Pull the exact number of videos requested directly from the channel's upload playlist
                 pl_res = youtube.playlistItems().list(part="contentDetails", playlistId=uploads_id, maxResults=analyze_depth).execute()
                 v_ids = [item['contentDetails']['videoId'] for item in pl_res.get('items', [])]
 
                 if not v_ids: continue
 
+                # Get the detailed statistics for all videos in a single rapid API call
                 v_res = youtube.videos().list(part="snippet,statistics", id=",".join(v_ids)).execute()
 
-                # Multithread the videos for this channel simultaneously (Massive speed boost)
-                with concurrent.futures.ThreadPoolExecutor(max_workers=analyze_depth) as executor:
-                    futures = [executor.submit(check_video_format, v_item, c_data, c_id) for v_item in v_res.get('items', [])]
-                    for future in concurrent.futures.as_completed(futures):
-                        result = future.result()
-                        if result:
-                            all_videos.append(result)
+                for v_item in v_res.get('items', []):
+                    v_id = v_item['id']
+                    
+                    pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
+                    date_str = pub_date.strftime("%b %d, %Y") # Formatted Date
+                    age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
+                    views = int(v_item['statistics'].get('viewCount', 0))
+                    vph = views / max(age_hours, 1)
+                    
+                    try:
+                        thumb = v_item['snippet']['thumbnails']['medium']['url']
+                    except KeyError:
+                        thumb = v_item['snippet']['thumbnails']['default']['url']
+
+                    all_videos.append({
+                        "title": v_item['snippet']['title'],
+                        "channel": c_data['title'],
+                        "logo": c_data.get('logo', ''),
+                        "thumbnail": thumb,
+                        "published": date_str,
+                        "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
+                        "videoLink": f"https://www.youtube.com/watch?v={v_id}",
+                        "channelLink": f"https://www.youtube.com/channel/{c_id}"
+                    })
 
             yield emit('progress', 'Sorting matrix by View Velocity...')
             all_videos.sort(key=lambda x: x['vph'], reverse=True)
