@@ -99,7 +99,7 @@ HTML_UI = """<!DOCTYPE html>
   .tag span { cursor: pointer; color: rgba(255,255,255,0.5); }
   .tag span:hover { color: #ff453a; }
 
-  .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .filter-col { display: flex; flex-direction: column; gap: 6px; }
   .filter-col label { font-size: 11px; color: var(--ink-dim); font-weight: 600; text-transform: uppercase; }
 
@@ -210,7 +210,7 @@ HTML_UI = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Advanced Filters -->
+    <!-- Advanced Filters (ALL 5 Restored) -->
     <div class="filter-grid">
       <div class="filter-col">
         <label>Discovery Max Results</label>
@@ -221,6 +221,7 @@ HTML_UI = """<!DOCTYPE html>
           <option value="50" selected>50 Results (Max)</option>
         </select></div>
       </div>
+      
       <div class="filter-col">
         <label>Discovery Upload Date</label>
         <div class="tag-container" style="min-height: 44px;"><select id="dateFilter" onchange="saveProfile()">
@@ -230,6 +231,17 @@ HTML_UI = """<!DOCTYPE html>
           <option value="365">This Year</option>
         </select></div>
       </div>
+      
+      <!-- RESTORED: Video Format Filter -->
+      <div class="filter-col">
+        <label>Discovery Video Format</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
+          <option value="any">Any Format</option>
+          <option value="short">Shorts Only (Vertical)</option>
+          <option value="long">Long Form Only</option>
+        </select></div>
+      </div>
+
       <div class="filter-col">
         <label>Analysis Depth / Channel</label>
         <div class="tag-container" style="min-height: 44px;"><select id="analyzeDepth" onchange="saveProfile()">
@@ -239,7 +251,7 @@ HTML_UI = """<!DOCTYPE html>
           <option value="50">Last 50 Videos</option>
         </select></div>
       </div>
-      <!-- NEW: Analysis Time Filter -->
+      
       <div class="filter-col">
         <label>Analysis Time Filter</label>
         <div class="tag-container" style="min-height: 44px;"><select id="analyzeMaxAge" onchange="saveProfile()">
@@ -286,7 +298,7 @@ HTML_UI = """<!DOCTYPE html>
     profiles: {
       'Default': { 
         seeds: [], niches: [], threshold: 5, 
-        dateFilter: '7', maxResults: 50, analyzeDepth: 15, analyzeMaxAge: 999999,
+        dateFilter: '7', typeFilter: 'any', maxResults: 50, analyzeDepth: 15, analyzeMaxAge: 999999,
         channels: {} 
       }
     }
@@ -329,7 +341,7 @@ HTML_UI = """<!DOCTYPE html>
 
   // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function loadPermanentData() {
-    const savedMaster = localStorage.getItem('app_master_v3_3');
+    const savedMaster = localStorage.getItem('app_master_v3_4');
     if (savedMaster) {
       masterData = JSON.parse(savedMaster);
     } 
@@ -344,7 +356,7 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function saveMaster() {
-    localStorage.setItem('app_master_v3_3', JSON.stringify(masterData));
+    localStorage.setItem('app_master_v3_4', JSON.stringify(masterData));
   }
 
   function renderProfileDropdown() {
@@ -368,7 +380,7 @@ HTML_UI = """<!DOCTYPE html>
     const pName = prompt("Enter new Workspace Profile Name:");
     if (pName && pName.trim() !== '') {
       if (!masterData.profiles[pName]) {
-        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', maxResults: 50, analyzeDepth: 15, analyzeMaxAge: 999999, channels: {} };
+        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', typeFilter: 'any', maxResults: 50, analyzeDepth: 15, analyzeMaxAge: 999999, channels: {} };
         masterData.activeProfile = pName;
         saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
       } else { alert("Profile name already exists."); }
@@ -390,6 +402,7 @@ HTML_UI = """<!DOCTYPE html>
     
     document.getElementById('thresholdInput').value = pData.threshold || 5;
     document.getElementById('dateFilter').value = pData.dateFilter || '7';
+    document.getElementById('typeFilter').value = pData.typeFilter || 'any';
     document.getElementById('maxResults').value = pData.maxResults || 50;
     document.getElementById('analyzeDepth').value = pData.analyzeDepth || 15;
     document.getElementById('analyzeMaxAge').value = pData.analyzeMaxAge || 999999;
@@ -404,6 +417,7 @@ HTML_UI = """<!DOCTYPE html>
     const active = masterData.activeProfile;
     masterData.profiles[active].threshold = parseInt(document.getElementById('thresholdInput').value) || 5;
     masterData.profiles[active].dateFilter = document.getElementById('dateFilter').value;
+    masterData.profiles[active].typeFilter = document.getElementById('typeFilter').value;
     masterData.profiles[active].maxResults = parseInt(document.getElementById('maxResults').value) || 50;
     masterData.profiles[active].analyzeDepth = parseInt(document.getElementById('analyzeDepth').value) || 15;
     masterData.profiles[active].analyzeMaxAge = parseInt(document.getElementById('analyzeMaxAge').value) || 999999;
@@ -539,7 +553,7 @@ HTML_UI = """<!DOCTYPE html>
       }
       const sParams = encodeURIComponent(pData.seeds.join(','));
       const nParams = encodeURIComponent(pData.niches.join(','));
-      url = `/api/discover?api_key=${masterData.apiKey}&seeds=${sParams}&niches=${nParams}&threshold=${pData.threshold}&period=${pData.dateFilter}&max=${pData.maxResults}`;
+      url = `/api/discover?api_key=${masterData.apiKey}&seeds=${sParams}&niches=${nParams}&threshold=${pData.threshold}&period=${pData.dateFilter}&vtype=${pData.typeFilter}&max=${pData.maxResults}`;
     } else {
       if (Object.keys(pData.channels).length === 0) {
         setStatus("Your Base List for this profile is empty. Run Discovery first.", "error"); enableBtns(); return;
@@ -608,7 +622,7 @@ HTML_UI = """<!DOCTYPE html>
         <td>${r.views.toLocaleString()} 👁️</td>
         <td><span class="badge">🔥 ${r.vph.toLocaleString()}/hr</span></td>
         <td>
-          <a class="table-btn" href="${r.videoLink}" target="_blank">▶️️</a>
+          <a class="table-btn" href="${r.videoLink}" target="_blank">▶</a>
           <a class="table-btn" href="${r.channelLink}" target="_blank">👤</a>
         </td>
       </tr>`;
@@ -639,6 +653,7 @@ def auto_discover():
     
     period = int(request.args.get('period', 7))
     max_res = int(request.args.get('max', 50))
+    vid_type = request.args.get('vtype', 'any')
 
     def generate():
         def emit(status, msg="", data=None, channel_info=None):
@@ -652,6 +667,11 @@ def auto_discover():
             new_channels = set()
             after_date = (datetime.now(timezone.utc) - timedelta(days=period)).isoformat()
             
+            # Map strict UI filter to API standard
+            api_duration_param = 'any'
+            if vid_type == 'short': api_duration_param = 'short'
+            if vid_type == 'long': api_duration_param = 'long'
+
             for seed in seeds:
                 if not seed.strip(): continue
                 yield emit('progress', f'Searching seed tag: "{seed}" (Max: {max_res})...')
@@ -662,7 +682,8 @@ def auto_discover():
                     type="video", 
                     order="date", 
                     publishedAfter=after_date,
-                    maxResults=max_res
+                    maxResults=max_res,
+                    videoDuration=api_duration_param
                 ).execute()
                 
                 for item in search_res.get('items', []):
@@ -748,7 +769,7 @@ def auto_analyze():
                         pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
                         age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
                         
-                        # NEW: The Time Filter blocks videos older than your selection
+                        # The Time Filter blocks videos older than your selection
                         if age_hours > max_age_hours:
                             continue
 
