@@ -3,70 +3,15 @@ from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import datetime, timezone, timedelta
 import concurrent.futures
+import requests
 import json
 import os
 
 app = Flask(__name__)
 
-# --- CLOUD DATABASE SYSTEM ---
-CLOUD_DB_FILE = 'cloud_users.json'
+# Backend in-memory store (continuously synced by the frontend to survive Render wipes)
+BASE_CHANNELS = {}
 
-def load_cloud_db():
-    if os.path.exists(CLOUD_DB_FILE):
-        with open(CLOUD_DB_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-def save_cloud_db(db):
-    with open(CLOUD_DB_FILE, 'w') as f:
-        json.dump(db, f)
-
-@app.route('/api/auth/signup', methods=['POST'])
-def signup():
-    data = request.json
-    email = data.get('email', '').strip().lower()
-    pwd = data.get('password', '')
-    payload = data.get('data', {})
-    
-    if not email or not pwd:
-        return jsonify({"error": "Email and Password required."}), 400
-        
-    db = load_cloud_db()
-    if email in db:
-        return jsonify({"error": "Email already exists. Please login."}), 400
-    
-    db[email] = {"password": pwd, "data": payload}
-    save_cloud_db(db)
-    return jsonify({"success": True, "data": payload})
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.json
-    email = data.get('email', '').strip().lower()
-    pwd = data.get('password', '')
-    
-    db = load_cloud_db()
-    if email not in db or db[email]['password'] != pwd:
-        return jsonify({"error": "Invalid email or password."}), 401
-        
-    return jsonify({"success": True, "data": db[email]['data']})
-
-@app.route('/api/auth/sync', methods=['POST'])
-def sync_auth():
-    data = request.json
-    email = data.get('email', '').strip().lower()
-    pwd = data.get('password', '')
-    payload = data.get('data', {})
-    
-    db = load_cloud_db()
-    if email in db and db[email]['password'] == pwd:
-        db[email]['data'] = payload
-        save_cloud_db(db)
-        return jsonify({"success": True})
-    return jsonify({"error": "Auth failed"}), 401
-
-
-# --- FRONTEND UI ---
 HTML_UI = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -116,7 +61,7 @@ HTML_UI = """<!DOCTYPE html>
   .login-box p { color: var(--ink-dim); font-size: 13px; margin-bottom: 24px; }
   .login-input {
     width: 100%; padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border-soft);
-    background: rgba(0,0,0,0.5); color: #fff; font-size: 14px; text-align: center; margin-bottom: 12px; outline: none;
+    background: rgba(0,0,0,0.5); color: #fff; font-size: 16px; text-align: center; margin-bottom: 16px; outline: none; letter-spacing: 4px;
   }
   .login-input:focus { border-color: var(--accent); }
 
@@ -180,14 +125,15 @@ HTML_UI = """<!DOCTYPE html>
   .status { font-size: 13px; font-weight: 500; color: var(--ink-dim); min-height: 20px; margin-top: 20px; text-align: center; }
   .status.active { color: var(--accent-2); }
   
-  /* Output Table & Sorting */
+  /* Output Table */
   .table-container { width: 100%; overflow-x: auto; max-height: 600px; overflow-y: auto; border-radius: var(--radius-sm); background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border-soft); margin-top: 24px; display: none; }
   .glass-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; white-space: nowrap; }
-  .glass-table th { position: sticky; top: 0; background: rgba(30, 30, 35, 0.9); backdrop-filter: blur(12px); color: var(--ink-dim); font-weight: 600; padding: 12px 16px; z-index: 2; }
+  .glass-table th { position: sticky; top: 0; background: rgba(30, 30, 35, 0.9); backdrop-filter: blur(12px); color: var(--ink-dim); font-weight: 600; padding: 12px 16px; z-index: 2; user-select: none; }
   .glass-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
   .glass-table tr:hover td { background: rgba(255,255,255,0.05); }
   
-  .sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
+  /* Sorting styling */
+  .sortable { cursor: pointer; transition: background 0.2s; }
   .sortable:hover { background: rgba(255,255,255,0.08); color: #fff; }
   
   .thumb-img { width: 64px; height: 36px; border-radius: 6px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); }
@@ -205,18 +151,13 @@ HTML_UI = """<!DOCTYPE html>
 </head>
 <body>
 
-<!-- Cloud Authentication Overlay -->
+<!-- Authentication Overlay -->
 <div id="loginOverlay">
   <div class="login-box">
-    <h2 id="loginTitle">Cloud Workspace</h2>
-    <p id="loginSub">Login or sign up to permanently sync your channels and tags everywhere.</p>
-    <input type="email" id="emailInput" class="login-input" placeholder="Email Address">
-    <input type="password" id="passInput" class="login-input" placeholder="Password">
-    <div style="display: flex; gap: 10px;">
-      <button class="solid btn-analyze" style="flex: 1;" onclick="handleAuth('login')">Login</button>
-      <button class="solid btn-discover" style="flex: 1;" onclick="handleAuth('signup')">Sign Up</button>
-    </div>
-    <div id="authStatus" style="color: #ff453a; margin-top: 16px; font-size: 12px; font-weight: 600;"></div>
+    <h2 id="loginTitle">System Locked</h2>
+    <p id="loginSub">Enter your Profile PIN to access the base.</p>
+    <input type="password" id="pinInput" class="login-input" placeholder="••••" onkeypress="if(event.key === 'Enter') checkLogin()">
+    <button class="solid btn-analyze" style="width:100%;" onclick="checkLogin()">Unlock</button>
   </div>
 </div>
 
@@ -236,10 +177,7 @@ HTML_UI = """<!DOCTYPE html>
         <button class="btn-icon" onclick="createProfile()">+ New</button>
         <button class="btn-icon btn-del-profile" onclick="deleteProfile()" title="Delete Profile">🗑️</button>
       </div>
-      <div>
-        <span style="font-size:12px; color:var(--ink-dim); margin-right: 12px;" id="userEmailDisplay"></span>
-        <button class="btn-icon" onclick="toggleSettings()" style="padding: 10px 16px; background: rgba(10, 132, 255, 0.2); color: #64d2ff;">⚙️ API & Base Manager</button>
-      </div>
+      <button class="btn-icon" onclick="toggleSettings()" style="padding: 10px 16px; background: rgba(10, 132, 255, 0.2); color: #64d2ff;">⚙️ API & Base Manager</button>
     </div>
 
     <!-- Settings & Base Manager Panel -->
@@ -292,23 +230,31 @@ HTML_UI = """<!DOCTYPE html>
           <option value="365">This Year</option>
         </select></div>
       </div>
-      
-      <!-- New Analysis Time Filter -->
       <div class="filter-col">
-        <label>Base Analysis Timeframe</label>
-        <div class="tag-container" style="min-height: 44px;"><select id="analyzeTime" onchange="saveProfile()">
-          <option value="12">Last 12 Hours</option>
-          <option value="24" selected>Last 24 Hours</option>
-          <option value="72">Last 3 Days</option>
-          <option value="168">Last 7 Days</option>
-          <option value="720">Last 30 Days</option>
+        <label>Analysis Depth / Channel</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="analyzeDepth" onchange="saveProfile()">
+          <option value="10">Last 10 Videos</option>
+          <option value="15" selected>Last 15 Videos</option>
+          <option value="30">Last 30 Videos</option>
+          <option value="50">Last 50 Videos</option>
         </select></div>
       </div>
-
+      <!-- NEW: Analysis Time Filter -->
       <div class="filter-col">
-        <label>Qual. Threshold (Matches)</label>
-        <div class="tag-container" style="min-height: 44px;"><input type="number" id="thresholdInput" value="5" placeholder="Matches" onchange="saveProfile()"></div>
+        <label>Analysis Time Filter</label>
+        <div class="tag-container" style="min-height: 44px;"><select id="analyzeMaxAge" onchange="saveProfile()">
+          <option value="12">Last 12 Hours</option>
+          <option value="24">Last 24 Hours</option>
+          <option value="168">Last Week (7 Days)</option>
+          <option value="720">Last Month (30 Days)</option>
+          <option value="999999" selected>Any Time</option>
+        </select></div>
       </div>
+    </div>
+    
+    <div class="filter-col" style="margin-top: -4px;">
+      <label>Qualification Threshold</label>
+      <div class="tag-container" style="min-height: 44px;"><input type="number" id="thresholdInput" value="5" placeholder="Minimum keyword matches" onchange="saveProfile()"></div>
     </div>
 
     <!-- Action Buttons -->
@@ -340,99 +286,65 @@ HTML_UI = """<!DOCTYPE html>
     profiles: {
       'Default': { 
         seeds: [], niches: [], threshold: 5, 
-        dateFilter: '7', maxResults: 50, analyzeTime: '24',
+        dateFilter: '7', maxResults: 50, analyzeDepth: 15, analyzeMaxAge: 999999,
         channels: {} 
       }
     }
   };
 
-  let currentUser = { email: '', pwd: '' };
-  
-  // --- GLOBALS FOR SORTING ---
+  // Sorting Globals
   window.lastFetchedResults = [];
-  window.sortState = { col: null, dir: 0 };
+  window.sortState = { col: null, dir: 0 }; 
 
-  // --- 1. CLOUD LOGIN SYSTEM ---
+  // --- 1. LOGIN SYSTEM ---
   window.onload = () => {
-    const savedEmail = localStorage.getItem('cloud_email');
-    const savedPwd = localStorage.getItem('cloud_pwd');
-    if (savedEmail && savedPwd) {
-      currentUser.email = savedEmail;
-      currentUser.pwd = savedPwd;
-      // Auto-login to pull latest cloud sync
-      handleAuth('login', true);
+    const savedPin = localStorage.getItem('profile_pin');
+    if (!savedPin) {
+      document.getElementById('loginTitle').innerText = 'Welcome Setup';
+      document.getElementById('loginSub').innerText = 'Create a PIN to permanently lock your profile and data.';
     }
   };
 
-  async function handleAuth(action, isAuto = false) {
-    const email = isAuto ? currentUser.email : document.getElementById('emailInput').value.trim();
-    const pwd = isAuto ? currentUser.pwd : document.getElementById('passInput').value;
-    const statusEl = document.getElementById('authStatus');
+  function checkLogin() {
+    const input = document.getElementById('pinInput').value;
+    const savedPin = localStorage.getItem('profile_pin');
     
-    if (!email || !pwd) {
-      statusEl.innerText = "Email and Password required.";
-      return;
-    }
-
-    statusEl.innerText = "Connecting to Cloud Workspace...";
-    statusEl.style.color = "var(--accent-2)";
-
-    try {
-      const endpoint = action === 'signup' ? '/api/auth/signup' : '/api/auth/login';
-      const body = { email: email, password: pwd };
-      if (action === 'signup') body.data = masterData;
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const json = await res.json();
-
-      if (json.success) {
-        currentUser.email = email;
-        currentUser.pwd = pwd;
-        localStorage.setItem('cloud_email', email);
-        localStorage.setItem('cloud_pwd', pwd);
-        masterData = json.data;
-        document.getElementById('userEmailDisplay').innerText = `👤 ${email}`;
-        
-        unlockSystem();
-      } else {
-        statusEl.innerText = json.error || "Authentication failed.";
-        statusEl.style.color = "#ff453a";
-      }
-    } catch (e) {
-      statusEl.innerText = "Server error. Ensure backend is running.";
-      statusEl.style.color = "#ff453a";
+    if (!input) return;
+    if (!savedPin) {
+      localStorage.setItem('profile_pin', input);
+      unlockSystem();
+    } else if (input === savedPin) {
+      unlockSystem();
+    } else {
+      document.getElementById('loginSub').innerText = '❌ Incorrect PIN';
+      document.getElementById('loginSub').style.color = '#ff453a';
     }
   }
 
   function unlockSystem() {
     document.getElementById('loginOverlay').style.display = 'none';
-    document.getElementById('ytApiKey').value = masterData.apiKey || '';
-    renderProfileDropdown();
-    loadActiveProfileUI();
+    loadPermanentData();
     setupTagListeners();
   }
 
-  // Backs up instantly to the cloud whenever settings change
-  async function syncCloudMaster() {
-    if (!currentUser.email) return;
-    try {
-      await fetch('/api/auth/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: currentUser.email, password: currentUser.pwd, data: masterData })
-      });
-    } catch (e) { console.error("Cloud sync failed"); }
+  // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
+  function loadPermanentData() {
+    const savedMaster = localStorage.getItem('app_master_v3_3');
+    if (savedMaster) {
+      masterData = JSON.parse(savedMaster);
+    } 
+    document.getElementById('ytApiKey').value = masterData.apiKey || '';
+    renderProfileDropdown();
+    loadActiveProfileUI();
   }
 
-
-  // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function saveGlobalApiKey() {
     masterData.apiKey = document.getElementById('ytApiKey').value.trim();
-    syncCloudMaster();
+    saveMaster();
+  }
+
+  function saveMaster() {
+    localStorage.setItem('app_master_v3_3', JSON.stringify(masterData));
   }
 
   function renderProfileDropdown() {
@@ -448,7 +360,7 @@ HTML_UI = """<!DOCTYPE html>
 
   function switchProfile() {
     masterData.activeProfile = document.getElementById('profileSelect').value;
-    syncCloudMaster();
+    saveMaster();
     loadActiveProfileUI();
   }
 
@@ -456,9 +368,9 @@ HTML_UI = """<!DOCTYPE html>
     const pName = prompt("Enter new Workspace Profile Name:");
     if (pName && pName.trim() !== '') {
       if (!masterData.profiles[pName]) {
-        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', maxResults: 50, analyzeTime: '24', channels: {} };
+        masterData.profiles[pName] = { seeds: [], niches: [], threshold: 5, dateFilter: '7', maxResults: 50, analyzeDepth: 15, analyzeMaxAge: 999999, channels: {} };
         masterData.activeProfile = pName;
-        syncCloudMaster(); renderProfileDropdown(); loadActiveProfileUI();
+        saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
       } else { alert("Profile name already exists."); }
     }
   }
@@ -469,7 +381,7 @@ HTML_UI = """<!DOCTYPE html>
     if (confirm(`Are you sure you want to delete workspace "${active}"?`)) {
       delete masterData.profiles[active];
       masterData.activeProfile = 'Default';
-      syncCloudMaster(); renderProfileDropdown(); loadActiveProfileUI();
+      saveMaster(); renderProfileDropdown(); loadActiveProfileUI();
     }
   }
 
@@ -479,11 +391,13 @@ HTML_UI = """<!DOCTYPE html>
     document.getElementById('thresholdInput').value = pData.threshold || 5;
     document.getElementById('dateFilter').value = pData.dateFilter || '7';
     document.getElementById('maxResults').value = pData.maxResults || 50;
-    document.getElementById('analyzeTime').value = pData.analyzeTime || '24';
+    document.getElementById('analyzeDepth').value = pData.analyzeDepth || 15;
+    document.getElementById('analyzeMaxAge').value = pData.analyzeMaxAge || 999999;
     
     renderTags('seedContainer', pData.seeds);
     renderTags('nicheContainer', pData.niches);
     renderChannelGrid();
+    syncBackend();
   }
 
   function saveProfile() {
@@ -491,10 +405,19 @@ HTML_UI = """<!DOCTYPE html>
     masterData.profiles[active].threshold = parseInt(document.getElementById('thresholdInput').value) || 5;
     masterData.profiles[active].dateFilter = document.getElementById('dateFilter').value;
     masterData.profiles[active].maxResults = parseInt(document.getElementById('maxResults').value) || 50;
-    masterData.profiles[active].analyzeTime = document.getElementById('analyzeTime').value;
-    syncCloudMaster();
+    masterData.profiles[active].analyzeDepth = parseInt(document.getElementById('analyzeDepth').value) || 15;
+    masterData.profiles[active].analyzeMaxAge = parseInt(document.getElementById('analyzeMaxAge').value) || 999999;
+    saveMaster();
   }
 
+  async function syncBackend() {
+    const channels = masterData.profiles[masterData.activeProfile].channels;
+    await fetch('/api/sync-channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(channels)
+    });
+  }
 
   // --- 3. TAG SYSTEM ---
   function setupTagListeners() {
@@ -504,7 +427,7 @@ HTML_UI = """<!DOCTYPE html>
         const active = masterData.activeProfile;
         if (!masterData.profiles[active][arrKey].includes(val)) {
           masterData.profiles[active][arrKey].push(val);
-          syncCloudMaster(); renderTags(containerId, masterData.profiles[active][arrKey]);
+          saveMaster(); renderTags(containerId, masterData.profiles[active][arrKey]);
         }
         e.target.value = '';
       }
@@ -529,7 +452,7 @@ HTML_UI = """<!DOCTYPE html>
   window.removeTag = function(containerId, idx) {
     const arrKey = containerId === 'seedContainer' ? 'seeds' : 'niches';
     masterData.profiles[masterData.activeProfile][arrKey].splice(idx, 1);
-    syncCloudMaster(); renderTags(containerId, masterData.profiles[masterData.activeProfile][arrKey]);
+    saveMaster(); renderTags(containerId, masterData.profiles[masterData.activeProfile][arrKey]);
   }
 
   // --- 4. BASE MANAGER (UI) ---
@@ -558,10 +481,44 @@ HTML_UI = """<!DOCTYPE html>
 
   window.deleteChannel = function(cId) {
     delete masterData.profiles[masterData.activeProfile].channels[cId];
-    syncCloudMaster(); renderChannelGrid();
+    saveMaster(); syncBackend(); renderChannelGrid();
   }
 
-  // --- 5. PIPELINE EXECUTION ---
+  // --- 5. SORTING LOGIC ---
+  function handleSort(col) {
+    if (window.sortState.col === col) {
+      window.sortState.dir = (window.sortState.dir + 1) % 3;
+    } else {
+      window.sortState.col = col; window.sortState.dir = 1; 
+    }
+
+    let toRender = [...window.lastFetchedResults];
+
+    if (window.sortState.dir !== 0) {
+      toRender.sort((a, b) => {
+        let valA = a[col];
+        let valB = b[col];
+        
+        // Direction 1 = Highest/Newest First, Direction 2 = Lowest/Oldest First
+        if (window.sortState.dir === 1) return valB - valA; 
+        return valA - valB; 
+      });
+    }
+    
+    renderTable(toRender);
+  }
+
+  function getSortIndicator(col) {
+    if (window.sortState && window.sortState.col === col) {
+      if (window.sortState.dir === 1) return ' ↓';
+      if (window.sortState.dir === 2) return ' ↑';
+    }
+    return '';
+  }
+
+  function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+
+  // --- 6. PIPELINE EXECUTION ---
   function setStatus(msg, type = '') {
     const el = document.getElementById('mainStatus'); el.textContent = msg; el.className = 'status ' + type;
   }
@@ -587,7 +544,7 @@ HTML_UI = """<!DOCTYPE html>
       if (Object.keys(pData.channels).length === 0) {
         setStatus("Your Base List for this profile is empty. Run Discovery first.", "error"); enableBtns(); return;
       }
-      url = `/api/analyze?api_key=${masterData.apiKey}&time=${pData.analyzeTime}`;
+      url = `/api/analyze?api_key=${masterData.apiKey}&depth=${pData.analyzeDepth}&maxage=${pData.analyzeMaxAge}`;
     }
 
     const eventSource = new EventSource(url);
@@ -598,14 +555,14 @@ HTML_UI = """<!DOCTYPE html>
       if (data.status === 'progress') setStatus(data.msg, "active");
       else if (data.status === 'channel_found') {
         masterData.profiles[masterData.activeProfile].channels[data.channel.id] = data.channel.data;
-        syncCloudMaster(); renderChannelGrid();
+        saveMaster(); syncBackend(); renderChannelGrid();
       }
       else if (data.status === 'done') {
         setStatus(data.msg, "success");
         if (data.results) {
-            window.lastFetchedResults = data.results;
+            window.lastFetchedResults = data.results; 
             window.sortState = { col: null, dir: 0 };
-            renderTable(window.lastFetchedResults);
+            renderTable(data.results);
         }
         eventSource.close(); enableBtns();
       } 
@@ -614,44 +571,13 @@ HTML_UI = """<!DOCTYPE html>
       }
     };
     eventSource.onerror = function() {
-      setStatus("Stream finished or disconnected. Outputting current results.", "success"); eventSource.close(); enableBtns();
+      setStatus("Stream finished or disconnected.", "success"); eventSource.close(); enableBtns();
     };
   }
 
   function enableBtns() {
     document.getElementById('btnDiscover').disabled = false;
     document.getElementById('btnAnalyze').disabled = false;
-  }
-
-  // --- 6. SORTING LOGIC ---
-  function handleSort(col) {
-    if (window.sortState.col === col) {
-      window.sortState.dir = (window.sortState.dir + 1) % 3;
-    } else {
-      window.sortState.col = col;
-      window.sortState.dir = 1; 
-    }
-
-    let toRender = [...window.lastFetchedResults];
-
-    if (window.sortState.dir !== 0) {
-      toRender.sort((a, b) => {
-        let valA = a[col];
-        let valB = b[col];
-        if (window.sortState.dir === 1) return valB - valA; 
-        return valA - valB; 
-      });
-    }
-    
-    renderTable(toRender);
-  }
-
-  function getSortIndicator(col) {
-    if (window.sortState && window.sortState.col === col) {
-      if (window.sortState.dir === 1) return ' ↓';
-      if (window.sortState.dir === 2) return ' ↑';
-    }
-    return '';
   }
 
   function renderTable(results) {
@@ -661,12 +587,12 @@ HTML_UI = """<!DOCTYPE html>
     const thead = document.getElementById('tableHead');
     const tbody = document.getElementById('tableBody');
 
-    // Clickable Sorting Headers
+    // Clickable Headers for Sorting
     thead.innerHTML = `<tr>
       <th>Video</th>
       <th>Title</th>
       <th>Base Channel</th>
-      <th class="sortable" onclick="handleSort('published_raw')">Published${getSortIndicator('published_raw')}</th>
+      <th class="sortable" onclick="handleSort('age_hours')">Published${getSortIndicator('age_hours')}</th>
       <th class="sortable" onclick="handleSort('views')">Views${getSortIndicator('views')}</th>
       <th class="sortable" onclick="handleSort('vph')">Velocity (VPH)${getSortIndicator('vph')}</th>
       <th>Links</th>
@@ -676,13 +602,13 @@ HTML_UI = """<!DOCTYPE html>
     results.forEach(r => {
       html += `<tr>
         <td><img class="thumb-img" src="${r.thumbnail}" alt="thumb"></td>
-        <td class="trunc" title="${r.title}">${r.title}</td>
-        <td><img class="logo-img" src="${r.logo}">${r.channel}</td>
+        <td class="trunc" title="${escapeHtml(r.title)}">${escapeHtml(r.title)}</td>
+        <td><img class="logo-img" src="${r.logo}">${escapeHtml(r.channel)}</td>
         <td class="date-badge">${r.published}</td>
         <td>${r.views.toLocaleString()} 👁️</td>
         <td><span class="badge">🔥 ${r.vph.toLocaleString()}/hr</span></td>
         <td>
-          <a class="table-btn" href="${r.videoLink}" target="_blank">▶️</a>
+          <a class="table-btn" href="${r.videoLink}" target="_blank">▶️️</a>
           <a class="table-btn" href="${r.channelLink}" target="_blank">👤</a>
         </td>
       </tr>`;
@@ -697,6 +623,12 @@ HTML_UI = """<!DOCTYPE html>
 @app.route("/")
 def index():
     return HTML_UI
+
+@app.route("/api/sync-channels", methods=["POST"])
+def sync_channels():
+    global BASE_CHANNELS
+    BASE_CHANNELS = request.json or {}
+    return jsonify({"success": True})
 
 @app.route('/api/discover', methods=['GET'])
 def auto_discover():
@@ -719,7 +651,7 @@ def auto_discover():
             youtube = build('youtube', 'v3', developerKey=api_key)
             new_channels = set()
             after_date = (datetime.now(timezone.utc) - timedelta(days=period)).isoformat()
-
+            
             for seed in seeds:
                 if not seed.strip(): continue
                 yield emit('progress', f'Searching seed tag: "{seed}" (Max: {max_res})...')
@@ -735,9 +667,10 @@ def auto_discover():
                 
                 for item in search_res.get('items', []):
                     c_id = item['snippet']['channelId']
-                    new_channels.add(c_id)
+                    if c_id not in BASE_CHANNELS:
+                        new_channels.add(c_id)
 
-            yield emit('progress', f'Extracted {len(new_channels)} channels. Running Niche Verification...')
+            yield emit('progress', f'Extracted {len(new_channels)} undocumented channels. Running Niche Verification...')
 
             new_channels = list(new_channels)
             if new_channels:
@@ -764,11 +697,12 @@ def auto_discover():
 
                         if match_count >= threshold:
                             channel_data = {"title": c_title, "uploads_id": uploads_id, "logo": logo}
-                            yield emit('channel_found', f'✅ Verified: {c_title} ({match_count} matches)', channel_info={"id": c_id, "data": channel_data})
+                            BASE_CHANNELS[c_id] = channel_data
+                            yield emit('channel_found', f'✅ Added to Base: {c_title} ({match_count} matches)', channel_info={"id": c_id, "data": channel_data})
                         else:
                             yield emit('progress', f'❌ Discarded: {c_title} ({match_count} matches)')
 
-            yield emit('done', f'Discovery Sequence Complete.')
+            yield emit('done', f'Discovery Sequence Complete. Base now contains {len(BASE_CHANNELS)} channels.')
 
         except Exception as e:
             yield emit('error', str(e))
@@ -779,22 +713,8 @@ def auto_discover():
 @app.route('/api/analyze', methods=['GET'])
 def auto_analyze():
     api_key = request.args.get('api_key')
-    time_limit_hours = int(request.args.get('time', 24))
-
-    # Pull user's specific channels dynamically via the synced auth db
-    # We will grab all channels across their profile to be safe
-    db = load_cloud_db()
-    # Find channels matching the user who made the request (In a robust app, we'd pass an auth token here)
-    # Since SSE is a GET request, we will pass the channel data temporarily via a POST route in a future upgrade if needed, 
-    # but for now, we will parse all channels in the DB to find the matching api_key workspace.
-    
-    # Wait, SSE GET doesn't send a body. We will quickly grab the channels from the DB where api_key matches.
-    user_channels = {}
-    for user_data in db.values():
-        if user_data['data'].get('apiKey') == api_key:
-            active_prof = user_data['data'].get('activeProfile', 'Default')
-            user_channels = user_data['data']['profiles'][active_prof].get('channels', {})
-            break
+    analyze_depth = int(request.args.get('depth', 15))
+    max_age_hours = int(request.args.get('maxage', 999999))
 
     def generate():
         def emit(status, msg="", data=None):
@@ -803,72 +723,76 @@ def auto_analyze():
             return f"data: {json.dumps(payload)}\n\n"
 
         try:
-            youtube = build('youtube', 'v3', developerKey=api_key)
             all_videos = []
-            total_base = len(user_channels)
-            
-            cutoff_date = datetime.now(timezone.utc) - timedelta(hours=time_limit_hours)
-            
-            yield emit('progress', f'Multithread Sequence: Scanning {total_base} channels for videos in the last {time_limit_hours} hours...')
+            total_base = len(BASE_CHANNELS)
+            yield emit('progress', f'Initializing high-speed scan for {total_base} channels (Depth: {analyze_depth})...')
 
-            # Multithreading Function to process channels safely and simultaneously
-            def process_channel(item):
-                c_id, c_data = item
+            # Thread worker function using ultra-fast direct HTTP requests
+            def fetch_channel_videos(c_id, c_data):
+                videos = []
                 uploads_id = c_data.get('uploads_id')
-                if not uploads_id: return []
+                if not uploads_id: return videos
 
-                pl_res = youtube.playlistItems().list(part="snippet,contentDetails", playlistId=uploads_id, maxResults=15).execute()
-                
-                v_ids = []
-                for pl_item in pl_res.get('items', []):
-                    pub_date = parser.isoparse(pl_item['snippet']['publishedAt'])
-                    if pub_date >= cutoff_date:
-                        v_ids.append(pl_item['contentDetails']['videoId'])
-
-                if not v_ids: return []
-
-                v_res = youtube.videos().list(part="snippet,statistics", id=",".join(v_ids)).execute()
-                
-                channel_results = []
-                for v_item in v_res.get('items', []):
-                    v_id = v_item['id']
-                    pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
-                    date_str = pub_date.strftime("%b %d, %Y")
-                    age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
-                    views = int(v_item['statistics'].get('viewCount', 0))
-                    vph = views / max(age_hours, 1)
+                pl_url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId={uploads_id}&maxResults={analyze_depth}&key={api_key}"
+                try:
+                    pl_res = requests.get(pl_url, timeout=10).json()
+                    if 'items' not in pl_res: return videos
                     
-                    try:
-                        thumb = v_item['snippet']['thumbnails']['medium']['url']
-                    except KeyError:
-                        thumb = v_item['snippet']['thumbnails']['default']['url']
+                    v_ids = [item['contentDetails']['videoId'] for item in pl_res['items']]
+                    if not v_ids: return videos
 
-                    channel_results.append({
-                        "title": v_item['snippet']['title'],
-                        "channel": c_data['title'],
-                        "logo": c_data.get('logo', ''),
-                        "thumbnail": thumb,
-                        "published": date_str,
-                        "published_raw": pub_date.timestamp(), # Used for precise HTML Sorting
-                        "views": views, "vph": round(vph, 1), "age_hours": round(age_hours, 1),
-                        "videoLink": f"https://www.youtube.com/watch?v={v_id}",
-                        "channelLink": f"https://www.youtube.com/channel/{c_id}"
-                    })
-                return channel_results
+                    v_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={','.join(v_ids)}&key={api_key}"
+                    v_res = requests.get(v_url, timeout=10).json()
 
-            # Spin up 15 workers to blast through hundreds of channels simultaneously
-            with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
-                futures = {executor.submit(process_channel, item): item for item in user_channels.items()}
+                    for v_item in v_res.get('items', []):
+                        pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
+                        age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
+                        
+                        # NEW: The Time Filter blocks videos older than your selection
+                        if age_hours > max_age_hours:
+                            continue
+
+                        date_str = pub_date.strftime("%b %d, %Y")
+                        views = int(v_item['statistics'].get('viewCount', 0))
+                        vph = views / max(age_hours, 1)
+                        
+                        try:
+                            thumb = v_item['snippet']['thumbnails']['medium']['url']
+                        except KeyError:
+                            thumb = v_item['snippet']['thumbnails']['default']['url']
+
+                        videos.append({
+                            "title": v_item['snippet']['title'],
+                            "channel": c_data['title'],
+                            "logo": c_data.get('logo', ''),
+                            "thumbnail": thumb,
+                            "published": date_str,
+                            "age_hours": round(age_hours, 1),
+                            "views": views, "vph": round(vph, 1), 
+                            "videoLink": f"https://www.youtube.com/watch?v={v_item['id']}",
+                            "channelLink": f"https://www.youtube.com/channel/{c_id}"
+                        })
+                except Exception:
+                    pass
+                return videos
+
+            completed = 0
+            
+            # The ThreadPoolExecutor processes 10 channels simultaneously, bypassing Render timeout
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(fetch_channel_videos, c_id, c_data): c_data['title'] for c_id, c_data in BASE_CHANNELS.items()}
                 
-                completed = 0
                 for future in concurrent.futures.as_completed(futures):
                     completed += 1
-                    # Yielding progress rapidly prevents Render from closing the connection!
-                    if completed % 10 == 0 or completed == total_base:
-                        yield emit('progress', f'[{completed}/{total_base}] Analyzing base channels...')
+                    c_title = futures[future]
+                    
+                    # Update frontend without flooding the Server-Sent Events stream
+                    if completed % 5 == 0 or completed == total_base:
+                        yield emit('progress', f'[{completed}/{total_base}] Analyzed {c_title}...')
+                    
                     try:
-                        res = future.result()
-                        all_videos.extend(res)
+                        channel_videos = future.result()
+                        all_videos.extend(channel_videos)
                     except Exception:
                         pass
 
