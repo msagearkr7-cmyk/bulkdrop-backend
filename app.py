@@ -2,7 +2,6 @@ from flask import Flask, request, Response, jsonify
 from googleapiclient.discovery import build
 from dateutil import parser
 from datetime import datetime, timezone, timedelta
-import concurrent.futures
 import requests
 import json
 import os
@@ -210,7 +209,7 @@ HTML_UI = """<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- Advanced Filters (ALL 5 Restored) -->
+    <!-- Advanced Filters -->
     <div class="filter-grid">
       <div class="filter-col">
         <label>Discovery Max Results</label>
@@ -232,7 +231,6 @@ HTML_UI = """<!DOCTYPE html>
         </select></div>
       </div>
       
-      <!-- RESTORED: Video Format Filter -->
       <div class="filter-col">
         <label>Discovery Video Format</label>
         <div class="tag-container" style="min-height: 44px;"><select id="typeFilter" onchange="saveProfile()">
@@ -341,7 +339,7 @@ HTML_UI = """<!DOCTYPE html>
 
   // --- 2. MULTI-PROFILE DATA MANAGEMENT ---
   function loadPermanentData() {
-    const savedMaster = localStorage.getItem('app_master_v3_4');
+    const savedMaster = localStorage.getItem('app_master_v4');
     if (savedMaster) {
       masterData = JSON.parse(savedMaster);
     } 
@@ -356,7 +354,7 @@ HTML_UI = """<!DOCTYPE html>
   }
 
   function saveMaster() {
-    localStorage.setItem('app_master_v3_4', JSON.stringify(masterData));
+    localStorage.setItem('app_master_v4', JSON.stringify(masterData));
   }
 
   function renderProfileDropdown() {
@@ -744,32 +742,37 @@ def auto_analyze():
             return f"data: {json.dumps(payload)}\n\n"
 
         try:
+            # Replaced Multithreading with an ultra-lightweight, memory-safe requests.Session()
+            session = requests.Session()
             all_videos = []
             total_base = len(BASE_CHANNELS)
-            yield emit('progress', f'Initializing high-speed scan for {total_base} channels (Depth: {analyze_depth})...')
+            
+            yield emit('progress', f'Initializing high-speed linear scan for {total_base} Base Channels...')
 
-            # Thread worker function using ultra-fast direct HTTP requests
-            def fetch_channel_videos(c_id, c_data):
-                videos = []
+            for idx, (c_id, c_data) in enumerate(BASE_CHANNELS.items(), 1):
+                # We yield progress for every single channel to keep the connection "hot" and prevent timeouts
+                yield emit('progress', f'[{idx}/{total_base}] Analyzing {c_data["title"]}...')
+                
                 uploads_id = c_data.get('uploads_id')
-                if not uploads_id: return videos
+                if not uploads_id: continue
 
-                pl_url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId={uploads_id}&maxResults={analyze_depth}&key={api_key}"
                 try:
-                    pl_res = requests.get(pl_url, timeout=10).json()
-                    if 'items' not in pl_res: return videos
+                    # 1. Fetch exactly `analyze_depth` video IDs for this channel
+                    pl_url = f"https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&playlistId={uploads_id}&maxResults={analyze_depth}&key={api_key}"
+                    pl_res = session.get(pl_url, timeout=10).json()
                     
-                    v_ids = [item['contentDetails']['videoId'] for item in pl_res['items']]
-                    if not v_ids: return videos
+                    v_ids = [item['contentDetails']['videoId'] for item in pl_res.get('items', [])]
+                    if not v_ids: continue
 
+                    # 2. Fetch stats for ALL of those videos simultaneously in ONE comma-separated query
                     v_url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={','.join(v_ids)}&key={api_key}"
-                    v_res = requests.get(v_url, timeout=10).json()
+                    v_res = session.get(v_url, timeout=10).json()
 
                     for v_item in v_res.get('items', []):
                         pub_date = parser.isoparse(v_item['snippet']['publishedAt'])
                         age_hours = (datetime.now(timezone.utc) - pub_date).total_seconds() / 3600
                         
-                        # The Time Filter blocks videos older than your selection
+                        # Apply the Time Filter (e.g. Only last 12 hours)
                         if age_hours > max_age_hours:
                             continue
 
@@ -782,7 +785,7 @@ def auto_analyze():
                         except KeyError:
                             thumb = v_item['snippet']['thumbnails']['default']['url']
 
-                        videos.append({
+                        all_videos.append({
                             "title": v_item['snippet']['title'],
                             "channel": c_data['title'],
                             "logo": c_data.get('logo', ''),
@@ -794,28 +797,8 @@ def auto_analyze():
                             "channelLink": f"https://www.youtube.com/channel/{c_id}"
                         })
                 except Exception:
+                    # Silently skip any channel that throws a network glitch to keep the massive loop moving
                     pass
-                return videos
-
-            completed = 0
-            
-            # The ThreadPoolExecutor processes 10 channels simultaneously, bypassing Render timeout
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = {executor.submit(fetch_channel_videos, c_id, c_data): c_data['title'] for c_id, c_data in BASE_CHANNELS.items()}
-                
-                for future in concurrent.futures.as_completed(futures):
-                    completed += 1
-                    c_title = futures[future]
-                    
-                    # Update frontend without flooding the Server-Sent Events stream
-                    if completed % 5 == 0 or completed == total_base:
-                        yield emit('progress', f'[{completed}/{total_base}] Analyzed {c_title}...')
-                    
-                    try:
-                        channel_videos = future.result()
-                        all_videos.extend(channel_videos)
-                    except Exception:
-                        pass
 
             yield emit('progress', 'Sorting matrix by View Velocity...')
             all_videos.sort(key=lambda x: x['vph'], reverse=True)
